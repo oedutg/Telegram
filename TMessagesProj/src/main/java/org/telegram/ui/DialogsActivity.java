@@ -2930,6 +2930,13 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (statusDrawable == null || actionBar == null) {
             return;
         }
+        // Show the signed-in account's first name on the main chat screen.
+        // Keep UltraTel as the application name elsewhere and preserve Premium status.
+        if (folderId == 0 && communityId == 0 && !onlySelect) {
+            String accountName = user != null ? UserObject.getFirstName(user) : null;
+            actionBar.setTitle(accountName != null && !accountName.trim().isEmpty()
+                ? accountName : getString(R.string.AppName), statusDrawable);
+        }
         Long emojiStatusId = UserObject.getEmojiStatusDocumentId(user);
         statusDrawableGiftId = null;
         if (emojiStatusId != null) {
@@ -3442,7 +3449,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 // theme hook only recolors when the color differs from the last one applied
                 logoDrawable.setColorFilter(lastLogoDrawableColor = getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.MULTIPLY);
                 SpannableStringBuilder ssb = new SpannableStringBuilder(getString(R.string.AppName));
-                ssb.setSpan(new ImageSpan(logoDrawable), 0, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                // UltraTel: show the fork name instead of Telegram's logo glyph.
                 actionBar.setTitle(ssb, statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
             }
