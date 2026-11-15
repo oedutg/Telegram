@@ -34427,6 +34427,7 @@ public class ChatActivity extends BaseFragment implements
                 ShareAlert forwardPicker = new ShareAlert(getContext(), ChatActivity.this,
                         originals, null, null, ChatObject.isChannel(currentChat),
                         null, null, false, false, false, null, themeDelegate);
+                forwardPicker.setUltraTelDirectForwardMode(true);
                 showDialog(forwardPicker);
                 break;
             }
