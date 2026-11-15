@@ -2087,7 +2087,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         setUltraTelEditedMediaRecipientCallback(callback, false);
     }
 
-    /** For animated stickers, show only the scrolling recipient grid and send button. */
+    /** For stickers or GIFs, skip the caption field and show recipients and send button. */
     public void setUltraTelEditedMediaRecipientCallback(
             UltraTelEditedMediaRecipientCallback callback, boolean animatedSticker) {
         ultraTelEditedMediaMode = BuildVars.isBetaApp() && callback != null;
@@ -3277,7 +3277,8 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
 
         public void loadNextPageIfNeeded(int lastVisiblePosition) {
-            if ((!ultraTelBulkMode && !ultraTelEditedMediaMode && !ultraTelDirectForwardMode) || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
+            if ((!ultraTelBulkMode && !ultraTelDirectForwardMode) || ultraTelEditedMediaMode
+                    || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
                 return;
             }
             int oldCount = visibleDialogsCount;
@@ -3296,7 +3297,12 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
         @Override
         public int getItemCount() {
-            int count = (ultraTelBulkMode || ultraTelEditedMediaMode || ultraTelDirectForwardMode) ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
+            // Match Turbo Tel's native ShareAlert: show every loaded dialog.
+            // RecyclerView recycles off-screen cells, so the list scrolls
+            // continuously instead of stopping on a hand-managed 20th item.
+            // Envio múltiplo keeps its own 20-by-20 view unchanged.
+            int count = (ultraTelBulkMode || ultraTelDirectForwardMode)
+                    ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
             if (count != 0) {
                 count++;
             }
