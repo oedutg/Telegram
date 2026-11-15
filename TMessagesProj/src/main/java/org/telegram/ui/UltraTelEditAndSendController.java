@@ -11,6 +11,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.UltraTelBulkSendGuard;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.MediaController;
+import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.SendMessagesHelper;
@@ -82,6 +83,13 @@ public final class UltraTelEditAndSendController {
             return;
         }
 
+        // Pro Forward: compose captions directly in the source chat instead
+        // of opening a modal PhotoViewer or requiring local gallery saves.
+        // Telegram can reuse the source photo/document media reference.
+        host.startUltraTelMediaCompose(sources);
+        return;
+
+        /*
         UltraTelMediaDraft draft = UltraTelMediaDraft.fromMessages(sources, host.getCurrentAccount());
         if (draft == null) {
             Toast.makeText(host.getParentActivity(),
@@ -122,6 +130,113 @@ public final class UltraTelEditAndSendController {
         }
         if (entries.isEmpty()) return;
         openMediaEditor(host, entries, initialCaption);
+        */
+    }
+
+    /**
+     * Sends a new media message using Telegram's existing remote media
+     * references; it does not use messages.forwardMessages and does not
+     * require the photo/video to be downloaded or saved to the gallery.
+     * The source MessageObject is treated as read-only.
+     */
+    public static void openRemoteMediaRecipientPicker(ChatActivity host,
+            ArrayList<MessageObject> sources, CharSequence caption,
+            Runnable onSent) {
+        if (host == null || host.getParentActivity() == null
+                || sources == null || sources.isEmpty()) return;
+
+        final ArrayList<MessageObject> safeSources = new ArrayList<>(sources);
+        for (MessageObject src : safeSources) {
+            if (!canOfferSingleMedia(src)) return;
+            TLRPC.MessageMedia media = MessageObject.getMedia(src.messageOwner);
+            if (!(media != null && media.photo instanceof TLRPC.TL_photo)
+                    && !(src.getDocument() instanceof TLRPC.TL_document)) {
+                Toast.makeText(host.getParentActivity(),
+                        "Esta mídia não está disponível para envio como nova mensagem.",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
+
+        ShareAlert picker = new ShareAlert(host.getParentActivity(),
+                (ArrayList<MessageObject>) null, "", false, null, false);
+        picker.setUltraTelEditedMediaRecipientCallback((dialogIds, withSound, pickerComment) -> {
+            String captionText = caption == null ? "" : caption.toString();
+            // A recipient-panel comment supplements the caption rather
+            // than silently replacing the edits made in the source chat.
+            if (!TextUtils.isEmpty(pickerComment)) {
+                captionText = captionText.isEmpty() ? pickerComment.toString()
+                        : captionText + "\n" + pickerComment;
+            }
+            return sendRemoteMedia(host, safeSources, captionText,
+                    dialogIds, withSound, onSent);
+        });
+        host.showDialog(picker);
+    }
+
+    private static boolean sendRemoteMedia(ChatActivity host,
+            ArrayList<MessageObject> sources, String caption,
+            ArrayList<Long> dialogIds, boolean withSound, Runnable onSent) {
+        if (host.getParentActivity() == null || dialogIds == null
+                || !UltraTelBulkSendGuard.isWithinRecipientLimit(dialogIds.size())) {
+            return false;
+        }
+        final ArrayList<Long> paidDialogs = new ArrayList<>();
+        int paidMessageCount = 0;
+        for (Long did : dialogIds) {
+            if (did == null || !UltraTelBulkSendGuard.isEligibleRecipient(did)) {
+                Toast.makeText(host.getParentActivity(),
+                        "Selecione apenas conversas privadas.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+            long price = host.getMessagesController().getSendPaidMessagesStars(did);
+            if (price <= 0) {
+                price = DialogObject.getMessagesStarsPrice(
+                        host.getMessagesController().isUserContactBlocked(did));
+            }
+            if (price > 0) {
+                paidDialogs.add(did);
+                paidMessageCount += sources.size();
+            }
+        }
+
+        final String editedCaption = caption == null ? "" : caption;
+        AlertsCreator.ensurePaidMessagesMultiConfirmation(
+                host.getCurrentAccount(), paidDialogs, paidMessageCount, prices -> {
+                    for (Long did : dialogIds) {
+                        Long stars = prices == null ? null : prices.get(did);
+                        long payStars = stars == null ? 0L : stars;
+                        for (int index = 0; index < sources.size(); index++) {
+                            MessageObject src = sources.get(index);
+                            TLRPC.MessageMedia media = MessageObject.getMedia(src.messageOwner);
+                            String itemCaption = index == 0 ? editedCaption :
+                                    (src.messageOwner.message == null ? "" : src.messageOwner.message);
+                            CharSequence[] entityText = { itemCaption };
+                            ArrayList<TLRPC.MessageEntity> entities =
+                                    MediaDataController.getInstance(host.getCurrentAccount())
+                                            .getEntities(entityText, true);
+                            String finalText = entityText[0] == null ? "" : entityText[0].toString();
+                            SendMessagesHelper.SendMessageParams params;
+                            if (media != null && media.photo instanceof TLRPC.TL_photo) {
+                                params = SendMessagesHelper.SendMessageParams.of(
+                                        (TLRPC.TL_photo) media.photo, null, did,
+                                        null, null, finalText, entities,
+                                        null, null, withSound, 0, 0, 0, src, false);
+                            } else if (src.getDocument() instanceof TLRPC.TL_document) {
+                                params = SendMessagesHelper.SendMessageParams.of(
+                                        (TLRPC.TL_document) src.getDocument(), null, null,
+                                        did, null, null, finalText, entities,
+                                        null, null, withSound, 0, 0, 0, src, null, false);
+                            } else {
+                                continue;
+                            }
+                            params.payStars = payStars;
+                            host.getAccountInstance().getSendMessagesHelper().sendMessage(params);
+                        }
+                    }
+                    if (onSent != null) onSent.run();
+                });
+        return true;
     }
 
     /**
