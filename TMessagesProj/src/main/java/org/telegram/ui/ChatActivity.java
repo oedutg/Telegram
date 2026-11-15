@@ -46676,7 +46676,7 @@ public class ChatActivity extends BaseFragment implements
                     options.add(OPTION_EDIT);
                     icons.add(R.drawable.msg_edit);
                 }
-                if (BuildVars.isBetaApp() && canForward && selectedObject != null
+                if (BuildVars.isBetaApp() && !noforwards && !isPeerNoForwards() && selectedObject != null
                         && selectedObject.messageOwner != null && !isPeerNoForwards()
                         && (UltraTelEditAndSendController.canOffer(selectedObject, selectedObjectGroup)
                             || (selectedObject.type == 0 && selectedObject.canForwardMessage()
@@ -46686,7 +46686,7 @@ public class ChatActivity extends BaseFragment implements
                     options.add(OPTION_ULTRATEL_EDIT_AND_SEND);
                     icons.add(R.drawable.msg_edit);
                 }
-                if (BuildVars.isBetaApp() && canForward && selectedObject != null && selectedObject.canForwardMessage()) {
+                if (BuildVars.isBetaApp() && !noforwards && !isPeerNoForwards() && selectedObject != null && selectedObject.canForwardMessage()) {
                     items.add("Envio múltiplo");
                     options.add(OPTION_ULTRATEL_BULK);
                     icons.add(R.drawable.msg_forward);
