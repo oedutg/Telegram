@@ -107,8 +107,9 @@ public final class UltraTelEditAndSendController {
         final ArrayList<MessageObject> safeSources = new ArrayList<>(sources);
         for (MessageObject src : safeSources) {
             if (!canOfferSingleMedia(src)) return;
-            TLRPC.MessageMedia media = MessageObject.getMedia(src.messageOwner);
-            if (!(media != null && media.photo instanceof TLRPC.TL_photo)
+            // getPhoto() resolves ordinary photos, webpage previews and
+            // rich-message photos. Looking only at media.photo loses them.
+            if (!(src.getPhoto() instanceof TLRPC.TL_photo)
                     && !(src.getDocument() instanceof TLRPC.TL_document)) {
                 Toast.makeText(host.getParentActivity(),
                         "Esta mídia não está disponível para envio como nova mensagem.",
@@ -167,7 +168,6 @@ public final class UltraTelEditAndSendController {
                         long payStars = stars == null ? 0L : stars;
                         for (int index = 0; index < sources.size(); index++) {
                             MessageObject src = sources.get(index);
-                            TLRPC.MessageMedia media = MessageObject.getMedia(src.messageOwner);
                             String itemCaption = index == 0 ? editedCaption :
                                     (src.messageOwner.message == null ? "" : src.messageOwner.message);
                             CharSequence[] entityText = { itemCaption };
@@ -176,9 +176,9 @@ public final class UltraTelEditAndSendController {
                                             .getEntities(entityText, true);
                             String finalText = entityText[0] == null ? "" : entityText[0].toString();
                             SendMessagesHelper.SendMessageParams params;
-                            if (media != null && media.photo instanceof TLRPC.TL_photo) {
+                            if (src.getPhoto() instanceof TLRPC.TL_photo) {
                                 params = SendMessagesHelper.SendMessageParams.of(
-                                        (TLRPC.TL_photo) media.photo, null, did,
+                                        (TLRPC.TL_photo) src.getPhoto(), null, did,
                                         null, null, finalText, entities,
                                         null, null, withSound, 0, 0, 0, src, false);
                             } else if (src.getDocument() instanceof TLRPC.TL_document) {
