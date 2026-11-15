@@ -34298,8 +34298,9 @@ public class ChatActivity extends BaseFragment implements
             case OPTION_ULTRATEL_EDIT_AND_SEND: {
                 final MessageObject original = selectedObject;
                 if (!BuildVars.isBetaApp() || original == null || original.messageOwner == null
-                        || original.type != 0 || original.messageOwner.noforwards
-                        || isPeerNoForwards() || TextUtils.isEmpty(original.messageOwner.message)) {
+                        || !original.canForwardMessage() || original.type != 0
+                        || original.messageOwner.noforwards || isPeerNoForwards()
+                        || TextUtils.isEmpty(original.messageOwner.message)) {
                     break;
                 }
                 final EditText draftEditor = new EditText(getParentActivity());
@@ -46662,6 +46663,7 @@ public class ChatActivity extends BaseFragment implements
                     icons.add(R.drawable.msg_edit);
                 }
                 if (BuildVars.isBetaApp() && canForward && selectedObject != null
+                        && selectedObject.canForwardMessage()
                         && selectedObject.type == 0 && selectedObject.messageOwner != null
                         && !selectedObject.messageOwner.noforwards && !isPeerNoForwards()
                         && !TextUtils.isEmpty(selectedObject.messageOwner.message)) {
