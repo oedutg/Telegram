@@ -34298,8 +34298,22 @@ public class ChatActivity extends BaseFragment implements
             case OPTION_ULTRATEL_EDIT_AND_SEND: {
                 final MessageObject original = selectedObject;
                 if (!BuildVars.isBetaApp() || original == null || original.messageOwner == null
-                        || !original.canForwardMessage() || original.type != 0
-                        || original.messageOwner.noforwards || isPeerNoForwards()
+                        || isPeerNoForwards()) {
+                    break;
+                }
+                if (UltraTelEditAndSendController.canOffer(original, selectedObjectGroup)) {
+                    ArrayList<MessageObject> originals = new ArrayList<>();
+                    if (selectedObjectGroup != null && selectedObjectGroup.messages != null
+                            && selectedObjectGroup.messages.size() > 1) {
+                        originals.addAll(selectedObjectGroup.messages);
+                    } else {
+                        originals.add(original);
+                    }
+                    UltraTelEditAndSendController.open(ChatActivity.this, originals);
+                    break;
+                }
+                if (!original.canForwardMessage() || original.type != 0
+                        || original.messageOwner.noforwards
                         || TextUtils.isEmpty(original.messageOwner.message)) {
                     break;
                 }
@@ -46663,10 +46677,11 @@ public class ChatActivity extends BaseFragment implements
                     icons.add(R.drawable.msg_edit);
                 }
                 if (BuildVars.isBetaApp() && canForward && selectedObject != null
-                        && selectedObject.canForwardMessage()
-                        && selectedObject.type == 0 && selectedObject.messageOwner != null
-                        && !selectedObject.messageOwner.noforwards && !isPeerNoForwards()
-                        && !TextUtils.isEmpty(selectedObject.messageOwner.message)) {
+                        && selectedObject.messageOwner != null && !isPeerNoForwards()
+                        && (UltraTelEditAndSendController.canOffer(selectedObject, selectedObjectGroup)
+                            || (selectedObject.type == 0 && selectedObject.canForwardMessage()
+                                && !selectedObject.messageOwner.noforwards
+                                && !TextUtils.isEmpty(selectedObject.messageOwner.message)))) {
                     items.add("Editar e Enviar");
                     options.add(OPTION_ULTRATEL_EDIT_AND_SEND);
                     icons.add(R.drawable.msg_edit);
@@ -47034,10 +47049,11 @@ public class ChatActivity extends BaseFragment implements
                 // This menu is used by another message category. Keep the
                 // UltraTel actions in the same order as the standard menu.
                 if (BuildVars.isBetaApp() && canForward && selectedObject != null
-                        && selectedObject.type == 0 && selectedObject.messageOwner != null
-                        && selectedObject.canForwardMessage()
-                        && !selectedObject.messageOwner.noforwards && !isPeerNoForwards()
-                        && !TextUtils.isEmpty(selectedObject.messageOwner.message)) {
+                        && selectedObject.messageOwner != null && !isPeerNoForwards()
+                        && (UltraTelEditAndSendController.canOffer(selectedObject, selectedObjectGroup)
+                            || (selectedObject.type == 0 && selectedObject.canForwardMessage()
+                                && !selectedObject.messageOwner.noforwards
+                                && !TextUtils.isEmpty(selectedObject.messageOwner.message)))) {
                     items.add("Editar e Enviar");
                     options.add(OPTION_ULTRATEL_EDIT_AND_SEND);
                     icons.add(R.drawable.msg_edit);
