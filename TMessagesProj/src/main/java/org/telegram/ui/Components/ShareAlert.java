@@ -1275,15 +1275,26 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             }
             selectDialog(view, dialog);
         });
+        gridView.addOnLayoutChangeListener((v, left, top, right, bottom,
+                oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (listAdapter != null && layoutManager != null
+                    && bottom > top && gridView.getVisibility() == View.VISIBLE) {
+                listAdapter.loadNextPageIfNeeded(layoutManager.findLastVisibleItemPosition());
+            }
+        });
         gridView.setOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 if (dy != 0) {
                     updateLayout();
                     previousScrollOffsetY = scrollOffsetY;
-                    if (dy > 0 && listAdapter != null) {
+                    if (listAdapter != null && dy > 0) {
                         listAdapter.loadNextPageIfNeeded(layoutManager.findLastVisibleItemPosition());
                     }
+                } else if (listAdapter != null) {
+                    // RecyclerView can lay out all 20 initial contacts without
+                    // producing a positive scroll delta. Prefetch in that case.
+                    listAdapter.loadNextPageIfNeeded(layoutManager.findLastVisibleItemPosition());
                 }
                 if (Bulletin.getVisibleBulletin() != null && Bulletin.getVisibleBulletin().getLayout() != null && Bulletin.getVisibleBulletin().getLayout().getParent() instanceof View && ((View) Bulletin.getVisibleBulletin().getLayout().getParent()).getParent() == bulletinContainer2) {
                     Bulletin.hideVisible();
@@ -3232,6 +3243,15 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 }
             }
             notifyDataSetChanged();
+            // Give the first 20 visible cells a chance to lay out before
+            // deciding whether there is enough content to scroll.
+            if (gridView != null) {
+                gridView.post(() -> {
+                    if (listAdapter == this && layoutManager != null) {
+                        loadNextPageIfNeeded(layoutManager.findLastVisibleItemPosition());
+                    }
+                });
+            }
         }
 
         public void loadNextPageIfNeeded(int lastVisiblePosition) {
@@ -3241,6 +3261,15 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             int oldCount = visibleDialogsCount;
             visibleDialogsCount = Math.min(dialogs.size(), visibleDialogsCount + ULTRATEL_PAGE_SIZE);
             notifyItemRangeInserted(oldCount + 1, visibleDialogsCount - oldCount);
+            // Run again after layout only if the new page is already entirely
+            // visible; otherwise wait for ordinary touch scrolling.
+            if (gridView != null) {
+                gridView.post(() -> {
+                    if (listAdapter == this && layoutManager != null) {
+                        loadNextPageIfNeeded(layoutManager.findLastVisibleItemPosition());
+                    }
+                });
+            }
         }
 
         @Override
