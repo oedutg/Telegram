@@ -4,8 +4,19 @@ on:
   push:
     branches:
       - feature/ultratel-beta-v1
+    paths:
+      - '.github/workflows/android-apk-teste.yml'
+      - 'TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java'
+      - 'TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java'
+      - 'TMessagesProj/src/main/java/org/telegram/ui/UltraTelEditAndSendController.java'
+      - 'TMessagesProj/src/main/java/org/telegram/messenger/UltraTelMediaDraft.java'
   workflow_dispatch:
     inputs:
+      compile_only:
+        description: 'Validar apenas a compilação Java da Beta (sem gerar APK)'
+        type: boolean
+        required: true
+        default: true
       publish_release:
         description: 'Publicar atualização para usuários do UltraTel'
         type: boolean
@@ -93,7 +104,7 @@ jobs:
           echo "RUSTUP_TOOLCHAIN=1.96.1" >> "$GITHUB_ENV"
 
       - name: Compilar Java UltraTel Beta (sem publicar APK)
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || inputs.compile_only == true
         run: |
           chmod +x ./gradlew
           ./gradlew :TMessagesProj_App:compileAfatReleaseJavaWithJavac \
@@ -104,7 +115,7 @@ jobs:
             -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
 
       - name: Compilar APK UltraTel (afatRelease)
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.compile_only != true
         run: |
           chmod +x ./gradlew
           ./gradlew :TMessagesProj_App:assembleAfatRelease \
@@ -115,7 +126,7 @@ jobs:
             -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
 
       - name: Disponibilizar APK
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.compile_only != true
         uses: actions/upload-artifact@v4
         with:
           name: ultratel-android-release
@@ -124,7 +135,7 @@ jobs:
           retention-days: 7
 
       - name: Preparar release e manifesto SHA-256
-        if: ${{ inputs.publish_release == true }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.compile_only != true && inputs.publish_release == true }}
         env:
           RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
@@ -155,7 +166,7 @@ jobs:
           PY
 
       - name: Publicar GitHub Release
-        if: ${{ inputs.publish_release == true }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.compile_only != true && inputs.publish_release == true }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
