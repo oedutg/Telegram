@@ -32,12 +32,12 @@ import java.util.concurrent.Executors;
 
 /**
  * Independent UltraTel updater. Release assets:
- * ultratel-update.json: {"version_code":73049,"version":"13.2.3","notes":"...","sha256":"64 hex","apk_url":"https://github.com/elenilda10/Telegram/releases/download/.../ultratel.apk"}
+ * ultratel-update.json: {"version_code":73049,"version":"13.2.3","notes":"...","sha256":"64 hex","apk_url":"https://github.com/oedutg/Telegram/releases/download/.../ultratel.apk"}
  * ultratel.apk: signed with the same UltraTel signing key.
  */
 public final class UltraTelUpdater {
     private static final String RELEASE_URL =
-        "https://api.github.com/repos/elenilda10/Telegram/releases/latest";
+        "https://api.github.com/repos/oedutg/Telegram/releases/latest";
     private static final String MANIFEST_NAME = "ultratel-update.json";
     private static final long CHECK_INTERVAL = 6L * 60 * 60 * 1000;
     private static final ExecutorService IO = Executors.newSingleThreadExecutor();
@@ -108,7 +108,7 @@ public final class UltraTelUpdater {
             URL parsed = new URL(url);
             return "https".equals(parsed.getProtocol())
                 && "github.com".equalsIgnoreCase(parsed.getHost())
-                && parsed.getPath().startsWith("/elenilda10/Telegram/releases/download/")
+                && parsed.getPath().startsWith("/oedutg/Telegram/releases/download/")
                 && parsed.getPath().endsWith("/ultratel.apk");
         } catch (Exception e) { return false; }
     }
