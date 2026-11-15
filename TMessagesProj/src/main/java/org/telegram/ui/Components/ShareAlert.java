@@ -51,6 +51,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Switch;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -179,6 +180,8 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     protected LongSparseArray<TLRPC.Dialog> selectedDialogs = new LongSparseArray<>();
     protected Map<TLRPC.Dialog, TLRPC.TL_forumTopic> selectedDialogTopics = new HashMap<>();
     private SwitchView switchView;
+    private Switch ultraTelSelectAllSwitch;
+    private boolean ultraTelUpdatingSelectAll;
     private int containerViewTop = -1;
     private boolean fullyShown = false;
     private boolean includeStory;
@@ -1088,6 +1091,15 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         });
 
         frameLayout.addView(searchView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 40, Gravity.BOTTOM | Gravity.LEFT, 11, 7, 11, 11));
+        if (BuildVars.isBetaApp()) {
+            ultraTelSelectAllSwitch = new Switch(context);
+            ultraTelSelectAllSwitch.setText("Selecionar todos");
+            ultraTelSelectAllSwitch.setTextColor(getThemedColor(Theme.key_dialogTextBlack));
+            ultraTelSelectAllSwitch.setOnCheckedChangeListener((button, checked) -> {
+                if (!ultraTelUpdatingSelectAll) setUltraTelAllRecipientsSelected(checked);
+            });
+            frameLayout.addView(ultraTelSelectAllSwitch, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 40, Gravity.TOP | Gravity.RIGHT, 0, 49, 14, 0));
+        }
         topicsBackActionBar = new ActionBar(context);
         topicsBackActionBar.setOccupyStatusBar(false);
         topicsBackActionBar.setBackButtonImage(R.drawable.ic_ab_back);
@@ -1950,6 +1962,37 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     }
 
     private int shiftDp = 4;
+    private void setUltraTelAllRecipientsSelected(boolean checked) {
+        if (!BuildVars.isBetaApp() || listAdapter == null) return;
+        if (checked) {
+            int eligible = 0;
+            for (TLRPC.Dialog dialog : listAdapter.dialogs) {
+                if (!org.telegram.messenger.UltraTelBulkSendGuard.isEligibleRecipient(dialog.id)) continue;
+                if (selectedDialogs.indexOfKey(dialog.id) < 0) selectedDialogs.put(dialog.id, dialog);
+                if (++eligible >= org.telegram.messenger.UltraTelBulkSendGuard.MAX_RECIPIENTS) break;
+            }
+        } else {
+            selectedDialogs.clear();
+            selectedDialogTopics.clear();
+        }
+        listAdapter.notifyDataSetChanged();
+        updateSelectedCount(1);
+    }
+
+    private void updateUltraTelSelectAllState() {
+        if (ultraTelSelectAllSwitch == null || listAdapter == null) return;
+        int eligible = 0;
+        int selected = 0;
+        for (TLRPC.Dialog dialog : listAdapter.dialogs) {
+            if (!org.telegram.messenger.UltraTelBulkSendGuard.isEligibleRecipient(dialog.id)) continue;
+            if (eligible++ >= org.telegram.messenger.UltraTelBulkSendGuard.MAX_RECIPIENTS) break;
+            if (selectedDialogs.indexOfKey(dialog.id) >= 0) selected++;
+        }
+        ultraTelUpdatingSelectAll = true;
+        ultraTelSelectAllSwitch.setChecked(eligible > 0 && selected == eligible);
+        ultraTelUpdatingSelectAll = false;
+    }
+
     private void selectDialog(View cell, TLRPC.Dialog dialog) {
         if (dialog instanceof ShareDialogsAdapter.MyStoryDialog) {
             onShareStory(cell);
@@ -2869,6 +2912,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     }
 
     public void updateSelectedCount(int animated) {
+        updateUltraTelSelectAllState();
         if (selectedDialogs.size() == 0) {
             showCommentTextView(false);
         } else {
