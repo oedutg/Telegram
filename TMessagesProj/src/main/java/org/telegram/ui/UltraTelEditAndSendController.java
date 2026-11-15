@@ -116,6 +116,12 @@ public final class UltraTelEditAndSendController {
                 return false;
             }
             List<MediaController.PhotoEntry> editedEntries = fragment.getSharedMediaEntries();
+            boolean asDocument = fragment.isUltraTelSendAsDocument();
+            // Validate every edited output before asking the user to pay/send.
+            if (copyEditedMedia(editedEntries, fragment.getSharedMediaCaption()).isEmpty()) {
+                Toast.makeText(host.getParentActivity(), "A edição não gerou arquivos válidos.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
             for (MessagesStorage.TopicKey key : dids) {
                 if (key.topicId != 0) {
                     Toast.makeText(host.getParentActivity(), "Selecione uma conversa sem tópico.", Toast.LENGTH_SHORT).show();
@@ -128,7 +134,9 @@ public final class UltraTelEditAndSendController {
                         return false;
                     }
                     for (MediaController.PhotoEntry entry : editedEntries) {
-                        if (entry.isVideo ? !ChatObject.canSendVideo(chat) : !ChatObject.canSendPhoto(chat)) {
+                        boolean forbidden = asDocument ? !ChatObject.canSendDocument(chat)
+                                : (entry.isVideo ? !ChatObject.canSendVideo(chat) : !ChatObject.canSendPhoto(chat));
+                        if (forbidden) {
                             Toast.makeText(host.getParentActivity(), "Esta conversa não permite o tipo de mídia selecionado.", Toast.LENGTH_SHORT).show();
                             return false;
                         }
@@ -138,8 +146,6 @@ public final class UltraTelEditAndSendController {
             CharSequence finalCaption = fragment.getSharedMediaCaption();
             if (finalCaption == null) finalCaption = message;
             final CharSequence caption = finalCaption;
-            final boolean asDocument = fragment.isUltraTelSendAsDocument();
-
             // The Telegram confirmation also accounts for paid-message prices.
             boolean pendingConfirmation = AlertsCreator.ensurePaidMessagesMultiConfirmationTopicKeys(
                     host.getCurrentAccount(), dids, editedEntries.size(), prices -> {
