@@ -34322,7 +34322,7 @@ public class ChatActivity extends BaseFragment implements
                         .setPositiveButton("Escolher destinatários", (dialog, which) -> {
                             String editedText = draftEditor.getText().toString();
                             if (TextUtils.isEmpty(editedText.trim())) {
-                                BulletinFactory.of(ChatActivity.this).createErrorBulletin("A mensagem não pode ficar vazia.").show();
+                                android.widget.Toast.makeText(getParentActivity(), "A mensagem não pode ficar vazia.", android.widget.Toast.LENGTH_SHORT).show();
                                 return;
                             }
                             ShareAlert share = new ShareAlert(getParentActivity(),
