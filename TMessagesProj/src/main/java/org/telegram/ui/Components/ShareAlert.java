@@ -195,11 +195,11 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 CharSequence pickerCaption, boolean includeText, boolean includeQuote);
     }
     private LinearLayout ultraTelEditControls;
-    private android.widget.CheckBox ultraTelEditAll;
-    private android.widget.CheckBox ultraTelEditText;
-    private android.widget.CheckBox ultraTelEditQuote;
-    private android.widget.HorizontalScrollView ultraTelFolderScroll;
-    private LinearLayout ultraTelFolderTabs;
+    // The same animated Telegram Switch and FilterTabsView used by Turbo Tel.
+    private org.telegram.ui.Components.Switch ultraTelEditAll;
+    private org.telegram.ui.Components.Switch ultraTelEditText;
+    private org.telegram.ui.Components.Switch ultraTelEditQuote;
+    private FilterTabsView ultraTelFolderTabs;
     private int ultraTelFolderIndex;
     private boolean ultraTelIncludeText = true;
     private boolean ultraTelIncludeQuote;
@@ -1222,14 +1222,14 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
             @Override
             protected boolean allowSelectChildAtPosition(float x, float y) {
-                return y >= dp(darkTheme && linkToCopy[1] != null ? 111 : 58) + systemInsets.top;
+                return y >= dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)) + systemInsets.top;
             }
 
             @Override
             public void draw(Canvas canvas) {
                 if (topicsGridView.getVisibility() != View.GONE) {
                     canvas.save();
-                    canvas.clipRect(0, scrollOffsetY + dp(darkTheme && linkToCopy[1] != null ? 111 : 58), getWidth(), getHeight());
+                    canvas.clipRect(0, scrollOffsetY + dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)), getWidth(), getHeight());
                 }
                 super.draw(canvas);
                 if (topicsGridView.getVisibility() != View.GONE) {
@@ -1331,14 +1331,14 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
             @Override
             protected boolean allowSelectChildAtPosition(float x, float y) {
-                return y >= dp(darkTheme && linkToCopy[1] != null ? 111 : 58) + systemInsets.top;
+                return y >= dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)) + systemInsets.top;
             }
 
             @Override
             public void draw(Canvas canvas) {
                 if (topicsGridView.getVisibility() != View.GONE) {
                     canvas.save();
-                    canvas.clipRect(0, scrollOffsetY + dp(darkTheme && linkToCopy[1] != null ? 111 : 58), getWidth(), getHeight());
+                    canvas.clipRect(0, scrollOffsetY + dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)), getWidth(), getHeight());
                 }
                 super.draw(canvas);
                 if (topicsGridView.getVisibility() != View.GONE) {
@@ -2120,11 +2120,11 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             setupUltraTelEditControls();
             ultraTelIncludeText = !animatedSticker;
             ultraTelIncludeQuote = false;
-            ultraTelEditText.setChecked(!animatedSticker);
+            ultraTelEditText.setChecked(!animatedSticker, false);
             ultraTelEditText.setEnabled(!animatedSticker);
-            ultraTelEditQuote.setChecked(false);
+            ultraTelEditQuote.setChecked(false, false);
             ultraTelEditControls.setVisibility(View.VISIBLE);
-            ultraTelFolderScroll.setVisibility(View.VISIBLE);
+            ultraTelFolderTabs.setVisibility(View.VISIBLE);
             NotificationCenter.getInstance(currentAccount).addWeakObserver(
                     this, NotificationCenter.dialogsNeedReload);
         }
@@ -2134,82 +2134,139 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
     private void setupUltraTelEditControls() {
         if (ultraTelEditControls != null) return;
+        // Important: keep everything INSIDE frameLayout. That is the native
+        // moving search header, translated with the BottomSheet while dragging.
+        // Adding views to containerView leaves them floating over the chat.
+        final int headerDp = 108;
+        final int headerWidth = getContext().getResources().getDisplayMetrics().widthPixels;
+        final int controlsWidth = dp(132);
+        FrameLayout.LayoutParams headerLp = (FrameLayout.LayoutParams) frameLayout.getLayoutParams();
+        headerLp.height = dp(headerDp);
+        frameLayout.setLayoutParams(headerLp);
+
+        FrameLayout.LayoutParams searchLp = (FrameLayout.LayoutParams) searchView.getLayoutParams();
+        searchLp.width = Math.max(dp(90), headerWidth - controlsWidth - dp(25));
+        searchLp.height = dp(45);
+        searchLp.gravity = Gravity.TOP | Gravity.LEFT;
+        searchLp.leftMargin = dp(10);
+        searchLp.rightMargin = 0;
+        searchLp.topMargin = dp(6);
+        searchLp.bottomMargin = 0;
+        searchView.setLayoutParams(searchLp);
+
         ultraTelEditControls = new LinearLayout(getContext());
         ultraTelEditControls.setOrientation(LinearLayout.HORIZONTAL);
         ultraTelEditControls.setGravity(Gravity.CENTER_VERTICAL);
-        ultraTelEditControls.setPadding(dp(8), 0, dp(8), 0);
         ultraTelEditControls.setBackgroundColor(getThemedColor(Theme.key_dialogBackground));
-        ultraTelEditAll = new android.widget.CheckBox(getContext());
-        ultraTelEditAll.setText("Todos");
-        ultraTelEditText = new android.widget.CheckBox(getContext());
-        ultraTelEditText.setText("Texto");
-        ultraTelEditQuote = new android.widget.CheckBox(getContext());
-        ultraTelEditQuote.setText("Citação");
-        for (android.widget.CheckBox box : new android.widget.CheckBox[]{
-                ultraTelEditAll, ultraTelEditText, ultraTelEditQuote}) {
-            box.setTextSize(12);
-            box.setGravity(Gravity.CENTER_VERTICAL);
-            box.setTextColor(getThemedColor(Theme.key_dialogTextBlack));
-            box.setPadding(0, 0, 0, 0);
-            ultraTelEditControls.addView(box, new LinearLayout.LayoutParams(0, dp(44), 1f));
-        }
+
+        ultraTelEditAll = createUltraTelNativeSwitch("Todos", 0);
+        ultraTelEditText = createUltraTelNativeSwitch("Texto", 1);
+        ultraTelEditQuote = createUltraTelNativeSwitch("Citar", 2);
+        FrameLayout.LayoutParams controlsLp = new FrameLayout.LayoutParams(
+                controlsWidth, dp(54), Gravity.TOP | Gravity.RIGHT);
+        controlsLp.topMargin = dp(2);
+        controlsLp.rightMargin = dp(5);
+        frameLayout.addView(ultraTelEditControls, controlsLp);
+
         ultraTelEditAll.setOnCheckedChangeListener((button, checked) -> {
             if (!ultraTelUpdatingSelectAll) setUltraTelAllRecipientsSelected(checked);
         });
         ultraTelEditText.setOnCheckedChangeListener((button, checked) -> ultraTelIncludeText = checked);
         ultraTelEditQuote.setOnCheckedChangeListener((button, checked) -> ultraTelIncludeQuote = checked);
-        containerView.addView(ultraTelEditControls, LayoutHelper.createFrame(
-                LayoutHelper.MATCH_PARENT, 44, Gravity.TOP | Gravity.LEFT, 0, 58, 0, 0));
 
-        ultraTelFolderScroll = new android.widget.HorizontalScrollView(getContext());
-        ultraTelFolderScroll.setHorizontalScrollBarEnabled(false);
-        ultraTelFolderScroll.setFillViewport(true);
-        ultraTelFolderScroll.setBackgroundColor(getThemedColor(Theme.key_dialogBackground));
-        ultraTelFolderTabs = new LinearLayout(getContext());
-        ultraTelFolderTabs.setGravity(Gravity.CENTER_VERTICAL);
-        ultraTelFolderTabs.setOrientation(LinearLayout.HORIZONTAL);
-        ultraTelFolderTabs.setPadding(dp(6), 0, dp(6), 0);
-        ultraTelFolderScroll.addView(ultraTelFolderTabs, new android.widget.HorizontalScrollView.LayoutParams(
-                LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT));
-        containerView.addView(ultraTelFolderScroll, LayoutHelper.createFrame(
-                LayoutHelper.MATCH_PARENT, 44, Gravity.TOP | Gravity.LEFT, 0, 102, 0, 0));
-        populateUltraTelFolderTabs();
-    }
-
-    private void populateUltraTelFolderTabs() {
-        if (ultraTelFolderTabs == null) return;
-        ultraTelFolderTabs.removeAllViews();
-        ArrayList<MessagesController.DialogFilter> folders =
-                MessagesController.getInstance(currentAccount).dialogFilters;
-        int count = folders == null ? 0 : folders.size();
-        if (ultraTelFolderIndex >= count) ultraTelFolderIndex = 0;
-        for (int index = 0; index < Math.max(1, count); index++) {
-            final int tabIndex = index;
-            TextView tab = new TextView(getContext());
-            tab.setText(index == 0 ? "Todas" : String.valueOf(folders.get(index).name));
-            tab.setTextSize(14);
-            tab.setSingleLine(true);
-            tab.setGravity(Gravity.CENTER);
-            tab.setPadding(dp(12), 0, dp(12), 0);
-            tab.setTypeface(index == ultraTelFolderIndex ? AndroidUtilities.bold() : null);
-            tab.setTextColor(getThemedColor(index == ultraTelFolderIndex
-                    ? Theme.key_dialogTextBlue2 : Theme.key_dialogTextBlack));
-            tab.setBackground(Theme.createRadSelectorDrawable(
-                    getThemedColor(Theme.key_listSelector), 8, 8));
-            ultraTelFolderTabs.addView(tab, new LinearLayout.LayoutParams(
-                    LayoutHelper.WRAP_CONTENT, dp(40)));
-            tab.setOnClickListener(v -> {
-                if (ultraTelFolderIndex == tabIndex) return;
-                ultraTelFolderIndex = tabIndex;
-                populateUltraTelFolderTabs();
+        // Telegram's native folder component, also used by Turbo Tel.
+        ultraTelFolderTabs = new FilterTabsView(getContext(), resourcesProvider);
+        ultraTelFolderTabs.setBackgroundColor(getThemedColor(Theme.key_dialogBackground));
+        ultraTelFolderTabs.setDelegate(new FilterTabsView.FilterTabsViewDelegate() {
+            @Override public void onPageSelected(FilterTabsView.Tab tab, boolean forward) {
+                ultraTelFolderIndex = tab.id;
                 if (searchView != null && searchView.editText.length() > 0) {
                     searchView.editText.setText("");
                 }
                 if (listAdapter != null) listAdapter.fetchDialogs();
                 if (layoutManager != null) layoutManager.scrollToPosition(0);
                 updateUltraTelSelectAllState();
-            });
+            }
+            @Override public void onPageScrolled(float progress) {}
+            @Override public void onSamePageSelected() {}
+            @Override public int getTabCounter(int tabId) { return 0; }
+            @Override public boolean didSelectTab(FilterTabsView.TabView tabView, boolean selected) { return false; }
+            @Override public boolean isTabMenuVisible() { return false; }
+            @Override public void onDeletePressed(int id) {}
+            @Override public void onPageReorder(int fromId, int toId) {}
+            @Override public boolean canPerformActions() { return false; }
+        });
+        frameLayout.addView(ultraTelFolderTabs, LayoutHelper.createFrame(
+                LayoutHelper.MATCH_PARENT, 43, Gravity.TOP | Gravity.LEFT, 0, 61, 0, 0));
+        populateUltraTelFolderTabs();
+
+        // Both grids use an equally tall first spacer, so no blank gap
+        // appears between the folders and the first row of chat avatars.
+        if (shadow[0] != null) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) shadow[0].getLayoutParams();
+            lp.topMargin = dp(headerDp);
+            shadow[0].setLayoutParams(lp);
         }
+        if (searchEmptyView != null) {
+            FrameLayout.LayoutParams lp =
+                    (FrameLayout.LayoutParams) searchEmptyView.getLayoutParams();
+            lp.topMargin = dp(headerDp);
+            searchEmptyView.setLayoutParams(lp);
+        }
+        if (listAdapter != null) listAdapter.notifyDataSetChanged();
+        if (searchAdapter != null) searchAdapter.notifyDataSetChanged();
+    }
+
+    private org.telegram.ui.Components.Switch createUltraTelNativeSwitch(String label, int control) {
+        LinearLayout cell = new LinearLayout(getContext());
+        cell.setGravity(Gravity.CENTER);
+        cell.setOrientation(LinearLayout.VERTICAL);
+        TextView text = new TextView(getContext());
+        text.setText(label);
+        text.setTextSize(11);
+        text.setTextColor(getThemedColor(Theme.key_dialogTextBlue2));
+        text.setGravity(Gravity.CENTER);
+        cell.addView(text, new LinearLayout.LayoutParams(
+                LayoutHelper.MATCH_PARENT, dp(20)));
+
+        org.telegram.ui.Components.Switch toggle =
+                new org.telegram.ui.Components.Switch(getContext(), resourcesProvider);
+        toggle.setColors(Theme.key_switchTrack, Theme.key_switchTrackChecked,
+                Theme.key_windowBackgroundWhite, Theme.key_windowBackgroundWhite);
+        cell.addView(toggle, new LinearLayout.LayoutParams(dp(37), dp(25)));
+        ultraTelEditControls.addView(cell, new LinearLayout.LayoutParams(
+                0, dp(54), 1f));
+        cell.setOnClickListener(v -> {
+            if (toggle.isEnabled()) toggle.setChecked(!toggle.isChecked(), true);
+        });
+        text.setOnClickListener(v -> {
+            if (toggle.isEnabled()) toggle.setChecked(!toggle.isChecked(), true);
+        });
+        return toggle;
+    }
+
+    private void populateUltraTelFolderTabs() {
+        if (ultraTelFolderTabs == null) return;
+        ultraTelFolderTabs.removeTabs();
+        ArrayList<MessagesController.DialogFilter> filters =
+                MessagesController.getInstance(currentAccount).dialogFilters;
+        if (filters == null || filters.size() == 0) {
+            ultraTelFolderTabs.addTab(0, 0, "Todos", false, true, false);
+        } else {
+            if (ultraTelFolderIndex >= filters.size()) ultraTelFolderIndex = 0;
+            for (int index = 0; index < filters.size(); index++) {
+                MessagesController.DialogFilter filter = filters.get(index);
+                if (index == 0) {
+                    ultraTelFolderTabs.addTab(index, filter.localId, "Todos",
+                            false, true, false);
+                } else {
+                    ultraTelFolderTabs.addTab(index, filter.localId,
+                            filter.name, filter.entities, filter.title_noanimate,
+                            false, filter.locked);
+                }
+            }
+        }
+        ultraTelFolderTabs.finishAddingTabs(false);
     }
 
     private boolean isUltraTelEditRecipient(long did) {
@@ -2261,7 +2318,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         ultraTelUpdatingSelectAll = true;
         boolean checked = eligible > 0 && selected == eligible;
         if (ultraTelEditedMediaMode && ultraTelEditAll != null) {
-            ultraTelEditAll.setChecked(checked);
+            ultraTelEditAll.setChecked(checked, true);
         } else if (ultraTelSelectAllSwitch != null) {
             ultraTelSelectAllSwitch.setChecked(checked);
         }
@@ -3417,7 +3474,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
 
         public void loadNextPageIfNeeded(int lastVisiblePosition) {
-            if ((!ultraTelBulkMode && !ultraTelDirectForwardMode) || ultraTelEditedMediaMode
+            if (!ultraTelBulkMode || ultraTelEditedMediaMode
                     || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
                 return;
             }
@@ -3441,7 +3498,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             // RecyclerView recycles off-screen cells, so the list scrolls
             // continuously instead of stopping on a hand-managed 20th item.
             // Envio múltiplo keeps its own 20-by-20 view unchanged.
-            int count = (ultraTelBulkMode || ultraTelDirectForwardMode)
+            int count = ultraTelBulkMode
                     ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
             if (count != 0) {
                 count++;
@@ -3485,7 +3542,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 case 1:
                 default: {
                     view = new View(context);
-                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, dp(ultraTelEditedMediaMode ? 146 : (darkTheme && linkToCopy[1] != null ? 109 : 56))));
+                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 109 : 56))));
                     break;
                 }
             }
@@ -3496,7 +3553,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
             if (holder.getItemViewType() == 1) {
                 ViewGroup.LayoutParams lp = holder.itemView.getLayoutParams();
-                int height = dp(ultraTelEditedMediaMode ? 146
+                int height = dp(ultraTelEditedMediaMode ? 108
                         : (darkTheme && linkToCopy[1] != null ? 109 : 56));
                 if (lp != null && lp.height != height) {
                     lp.height = height;
@@ -4041,7 +4098,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 default:
                 case 1: {
                     view = new View(context);
-                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, dp(ultraTelEditedMediaMode ? 146 : (darkTheme && linkToCopy[1] != null ? 109 : 56))));
+                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 109 : 56))));
                     break;
                 }
                 case 2: {
@@ -4149,7 +4206,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
             if (holder.getItemViewType() == 1) {
                 ViewGroup.LayoutParams lp = holder.itemView.getLayoutParams();
-                int height = dp(ultraTelEditedMediaMode ? 146
+                int height = dp(ultraTelEditedMediaMode ? 108
                         : (darkTheme && linkToCopy[1] != null ? 109 : 56));
                 if (lp != null && lp.height != height) {
                     lp.height = height;

@@ -34329,9 +34329,27 @@ public class ChatActivity extends BaseFragment implements
             chatActivityEnterView.setFieldText("");
         };
 
+        // Match Turbo Tel: the caption starts as the native formatted caption,
+        // not a plain String. That retains TL_messageEntityCustomEmoji document IDs
+        // and the AnimatedEmojiSpan that displays Premium emojis in the editor.
+        MessageObject captionSource = first;
+        for (MessageObject item : savedMedia) {
+            if (item.messageOwner != null && !TextUtils.isEmpty(item.messageOwner.message)) {
+                captionSource = item;
+                break;
+            }
+        }
+        String rawCaption = captionSource.messageOwner.message == null
+                ? "" : captionSource.messageOwner.message;
+        CharSequence renderedCaption = captionSource.caption != null
+                && TextUtils.equals(captionSource.caption.toString(), rawCaption)
+                ? captionSource.caption : rawCaption;
+        CharSequence editableCaption = MessageObject.replaceAnimatedEmoji(
+                new android.text.SpannableStringBuilder(renderedCaption),
+                captionSource.messageOwner.entities,
+                new android.graphics.Paint().getFontMetricsInt());
         chatActivityEnterView.setUltraTelMediaPreview(first, savedMedia.size(), clearDraft);
-        chatActivityEnterView.setFieldText(first.messageOwner.message == null
-                ? "" : first.messageOwner.message);
+        chatActivityEnterView.setFieldText(editableCaption == null ? "" : editableCaption);
         chatActivityEnterView.setUltraTelTextSendInterceptor(edited -> {
             if (!ultraTelMediaComposerActive || getParentActivity() == null) return;
             UltraTelEditAndSendController.openRemoteMediaRecipientPicker(

@@ -6615,6 +6615,12 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void hideTopView(final boolean animated) {
+        // While Editar e Enviar is composing, this top panel is owned by the
+        // media draft. Emoji pickers, keyboard resizing, and automatic reply
+        // updates must not silently dismiss it.
+        if (ultraTelMediaPreview != null && ultraTelTextSendInterceptor != null) {
+            return;
+        }
         if (topView == null || !topViewShowed) {
             return;
         }
@@ -6682,7 +6688,15 @@ public class ChatActivityEnterView extends FrameLayout implements
             delegate.onWindowSizeChanged(size);
         }
         if (topView != null) {
-            if (size < dp(72) + ActionBar.getCurrentActionBarHeight()) {
+            // Opening the emoji panel changes available height and previously
+            // hid the Editar e Enviar preview even though its draft was active.
+            // Preserve the entire composer until explicit cancel/send/navigation.
+            if (ultraTelMediaPreview != null && ultraTelTextSendInterceptor != null) {
+                if (!allowShowTopView) allowShowTopView = true;
+                if (needShowTopView) {
+                    animatorTopViewVisibility.setValue(true, false);
+                }
+            } else if (size < dp(72) + ActionBar.getCurrentActionBarHeight()) {
                 if (allowShowTopView) {
                     allowShowTopView = false;
                     if (needShowTopView) {
