@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.widget.Toast;
 
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.MediaController;
@@ -11,6 +12,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.UltraTelMediaDraft;
+import org.telegram.messenger.VideoEditedInfo;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.AlertsCreator;
 
@@ -98,7 +100,83 @@ public final class UltraTelEditAndSendController {
             }
         }
         if (entries.isEmpty()) return;
+        openMediaEditor(host, entries, initialCaption);
+    }
 
+    /**
+     * Edit first, then choose a recipient. The ordinary Telegram forwarding
+     * dialog must not be mistaken for an editor. Cancelling PhotoViewer never
+     * opens the recipient picker or sends anything.
+     */
+    private static void openMediaEditor(ChatActivity host,
+            ArrayList<MediaController.PhotoEntry> entries, CharSequence initialCaption) {
+        final CharSequence[] editedCaption = {initialCaption};
+        PhotoViewer viewer = PhotoViewer.getInstance();
+        if (viewer.isVisible()) {
+            viewer.closePhoto(false, false);
+        }
+        viewer.setParentActivity(host, host.getResourceProvider());
+        viewer.hasCaptionForAllMedia = true;
+        viewer.captionForAllMedia = initialCaption;
+        viewer.openPhotoForSelect(new ArrayList<Object>(entries), 0, 0, false,
+                new PhotoViewer.EmptyPhotoViewerProvider() {
+                    @Override
+                    public int getSelectedCount() {
+                        return entries.size();
+                    }
+
+                    @Override
+                    public boolean isPhotoChecked(int index) {
+                        return index >= 0 && index < entries.size();
+                    }
+
+                    @Override
+                    public int setPhotoChecked(int index, VideoEditedInfo videoEditedInfo) {
+                        if (index >= 0 && index < entries.size()) {
+                            entries.get(index).editedInfo = videoEditedInfo;
+                        }
+                        return index;
+                    }
+
+                    @Override
+                    public boolean canScrollAway() {
+                        return false;
+                    }
+
+                    @Override
+                    public void onApplyCaption(CharSequence caption) {
+                        editedCaption[0] = caption;
+                    }
+
+                    @Override
+                    public void sendButtonPressed(int index, VideoEditedInfo videoEditedInfo,
+                            boolean notify, int scheduleDate, int scheduleRepeatPeriod,
+                            boolean forceDocument) {
+                        if (index >= 0 && index < entries.size() && videoEditedInfo != null) {
+                            entries.get(index).editedInfo = videoEditedInfo;
+                        }
+                        CharSequence currentCaption = PhotoViewer.getInstance().getCurrentCaptionText();
+                        final CharSequence caption = currentCaption != null
+                                ? currentCaption : editedCaption[0];
+                        for (MediaController.PhotoEntry entry : entries) {
+                            entry.caption = caption;
+                        }
+                        PhotoViewer.getInstance().closePhoto(true, false);
+                        // Open the native recipient selector only after the
+                        // native media editor has finished and closed.
+                        AndroidUtilities.runOnUIThread(() -> {
+                            if (host.getParentActivity() != null) {
+                                openRecipientPicker(host, entries, caption, forceDocument);
+                            }
+                        }, 250);
+                    }
+                }, null);
+        viewer.setSelectionDisabled(true);
+    }
+
+    private static void openRecipientPicker(ChatActivity host,
+            ArrayList<MediaController.PhotoEntry> entries, CharSequence initialCaption,
+            boolean sendAsDocumentFromEditor) {
         Bundle args = new Bundle();
         args.putBoolean("onlySelect", true);
         args.putInt("dialogsType", DialogsActivity.DIALOGS_TYPE_FORWARD);
@@ -116,7 +194,7 @@ public final class UltraTelEditAndSendController {
                 return false;
             }
             List<MediaController.PhotoEntry> editedEntries = fragment.getSharedMediaEntries();
-            boolean asDocument = fragment.isUltraTelSendAsDocument();
+            boolean asDocument = sendAsDocumentFromEditor || fragment.isUltraTelSendAsDocument();
             // Validate every edited output before asking the user to pay/send.
             if (copyEditedMedia(editedEntries, fragment.getSharedMediaCaption()).isEmpty()) {
                 Toast.makeText(host.getParentActivity(), "A edição não gerou arquivos válidos.", Toast.LENGTH_SHORT).show();
