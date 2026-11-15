@@ -56,12 +56,29 @@ public final class UltraTelEditAndSendController {
         return source != null && source.messageOwner != null
                 && source.messageOwner.action == null
                 && !source.messageOwner.noforwards && source.canForwardMessage()
-                && (source.isPhoto() || source.isVideo() || source.isGif() || source.isSticker());
+                && (source.isPhoto() || source.isVideo() || source.isGif()
+                    || source.isSticker() || source.isAnimatedSticker() || source.isVideoSticker());
+    }
+
+    private static boolean isAnimatedStickerMedia(MessageObject source) {
+        return source != null && source.getDocument() instanceof TLRPC.TL_document
+                && (source.isAnimatedSticker() || source.isVideoSticker()
+                    || MessageObject.isAnimatedStickerDocument(source.getDocument(), true));
     }
 
     public static void open(ChatActivity host, ArrayList<MessageObject> sources) {
         if (!BuildVars.isBetaApp() || host == null || host.getParentActivity() == null
                 || sources == null || sources.isEmpty()) {
+            return;
+        }
+
+        // Animated TGS and WebM stickers do not have editable text or a
+        // PhotoViewer-compatible raster source. Go directly to the same
+        // scrolling recipient grid as Envio múltiplo, without a composer.
+        if (sources.size() == 1 && isAnimatedStickerMedia(sources.get(0))) {
+            MessageObject sticker = sources.get(0);
+            if (!canOfferSingleMedia(sticker)) return;
+            openAnimatedStickerRecipients(host, sticker);
             return;
         }
 
@@ -186,6 +203,68 @@ public final class UltraTelEditAndSendController {
         }
         viewer.setSelectionDisabled(true);
         viewer.setTitle("Editar e Enviar");
+    }
+
+    /**
+     * Animated stickers are resent as native Telegram stickers (not forwarded
+     * messages, converted videos or generic documents).
+     */
+    private static void openAnimatedStickerRecipients(ChatActivity host, MessageObject source) {
+        if (host.getParentActivity() == null || !(source.getDocument() instanceof TLRPC.TL_document)) {
+            return;
+        }
+        ShareAlert picker = new ShareAlert(host.getParentActivity(),
+                (ArrayList<MessageObject>) null, "", false, null, false);
+        picker.setUltraTelEditedMediaRecipientCallback(
+                (dialogIds, withSound, unusedCaption) ->
+                        sendAnimatedSticker(host, source, dialogIds, withSound),
+                true);
+        host.showDialog(picker);
+    }
+
+    private static boolean sendAnimatedSticker(ChatActivity host, MessageObject source,
+            ArrayList<Long> dialogIds, boolean withSound) {
+        if (host.getParentActivity() == null || source == null
+                || source.messageOwner == null || source.messageOwner.noforwards
+                || !source.canForwardMessage()
+                || !(source.getDocument() instanceof TLRPC.TL_document)
+                || dialogIds == null
+                || !UltraTelBulkSendGuard.isWithinRecipientLimit(dialogIds.size())) {
+            return false;
+        }
+
+        ArrayList<Long> paidDialogs = new ArrayList<>();
+        int paidMessages = 0;
+        for (Long did : dialogIds) {
+            if (did == null || !UltraTelBulkSendGuard.isEligibleRecipient(did)) {
+                Toast.makeText(host.getParentActivity(),
+                        "Selecione apenas conversas privadas.", Toast.LENGTH_SHORT).show();
+                return false;
+            }
+            MessagesController controller = host.getMessagesController();
+            long price = controller.getSendPaidMessagesStars(did);
+            if (price <= 0) {
+                price = DialogObject.getMessagesStarsPrice(controller.isUserContactBlocked(did));
+            }
+            if (price > 0) {
+                paidDialogs.add(did);
+                paidMessages++;
+            }
+        }
+
+        final TLRPC.Document stickerDocument = source.getDocument();
+        AlertsCreator.ensurePaidMessagesMultiConfirmation(
+                host.getCurrentAccount(), paidDialogs, paidMessages, prices -> {
+                    for (Long did : dialogIds) {
+                        Long price = prices == null ? null : prices.get(did);
+                        host.getAccountInstance().getSendMessagesHelper().sendSticker(
+                                stickerDocument, null, did,
+                                null, null, null, null, null,
+                                withSound, 0, 0, false, source, null,
+                                price == null ? 0L : price, 0, null);
+                    }
+                });
+        return true;
     }
 
     private static void openRecipientPicker(ChatActivity host,
