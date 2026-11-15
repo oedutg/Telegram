@@ -47029,6 +47029,23 @@ public class ChatActivity extends BaseFragment implements
                     options.add(OPTION_EDIT);
                     icons.add(R.drawable.msg_edit);
                 }
+                // This menu is used by another message category. Keep the
+                // UltraTel actions in the same order as the standard menu.
+                if (BuildVars.isBetaApp() && canForward && selectedObject != null
+                        && selectedObject.type == 0 && selectedObject.messageOwner != null
+                        && selectedObject.canForwardMessage()
+                        && !selectedObject.messageOwner.noforwards && !isPeerNoForwards()
+                        && !TextUtils.isEmpty(selectedObject.messageOwner.message)) {
+                    items.add("Editar e Enviar");
+                    options.add(OPTION_ULTRATEL_EDIT_AND_SEND);
+                    icons.add(R.drawable.msg_edit);
+                }
+                if (BuildVars.isBetaApp() && canForward && selectedObject != null
+                        && selectedObject.canForwardMessage() && !isPeerNoForwards()) {
+                    items.add("Envio múltiplo");
+                    options.add(OPTION_ULTRATEL_BULK);
+                    icons.add(R.drawable.msg_forward);
+                }
                 if (ChatObject.isMonoForum(currentChat) && selectedObject.getGroupId() == 0 && selectedObjectGroup == null && message != null && message.messageOwner != null && message.messageOwner.suggested_post == null && message.messageOwner.action == null) {
                     items.add(LocaleController.getString(R.string.EditOfferAdd));
                     options.add(OPTION_SUGGESTION_ADD_OFFER);
