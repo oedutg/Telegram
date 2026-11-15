@@ -2041,7 +2041,10 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             int eligible = 0;
             for (TLRPC.Dialog dialog : listAdapter.dialogs) {
                 if (!org.telegram.messenger.UltraTelBulkSendGuard.isEligibleRecipient(dialog.id)) continue;
-                if (selectedDialogs.indexOfKey(dialog.id) < 0) selectedDialogs.put(dialog.id, dialog);
+                if (selectedDialogs.indexOfKey(dialog.id) < 0) {
+                    if (selectedDialogs.size() >= org.telegram.messenger.UltraTelBulkSendGuard.MAX_RECIPIENTS) break;
+                    selectedDialogs.put(dialog.id, dialog);
+                }
                 if (++eligible >= org.telegram.messenger.UltraTelBulkSendGuard.MAX_RECIPIENTS) break;
             }
         } else {
