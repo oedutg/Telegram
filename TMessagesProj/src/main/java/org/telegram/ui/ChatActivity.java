@@ -1246,6 +1246,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_DELETE = 1;
     public final static int OPTION_FORWARD = 2;
     private static final int OPTION_ULTRATEL_BULK = 100501;
+    private static final int OPTION_ULTRATEL_EDIT_AND_SEND = 100502;
     public final static int OPTION_COPY = 3;
     public final static int OPTION_SAVE_TO_GALLERY = 4;
     public final static int OPTION_APPLY_LOCALIZATION_OR_THEME = 5;
@@ -34294,6 +34295,43 @@ public class ChatActivity extends BaseFragment implements
         }
         boolean preserveDim = false;
         switch (option) {
+            case OPTION_ULTRATEL_EDIT_AND_SEND: {
+                final MessageObject original = selectedObject;
+                if (!BuildVars.isBetaApp() || original == null || original.messageOwner == null
+                        || original.type != 0 || original.messageOwner.noforwards
+                        || isPeerNoForwards() || TextUtils.isEmpty(original.messageOwner.message)) {
+                    break;
+                }
+                final EditText draftEditor = new EditText(getParentActivity());
+                draftEditor.setSingleLine(false);
+                draftEditor.setMinLines(3);
+                draftEditor.setMaxLines(12);
+                draftEditor.setText(original.messageOwner.message);
+                draftEditor.setSelection(draftEditor.length());
+                final android.widget.FrameLayout wrapper = new android.widget.FrameLayout(getParentActivity());
+                android.widget.FrameLayout.LayoutParams editorParams = new android.widget.FrameLayout.LayoutParams(
+                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
+                editorParams.leftMargin = AndroidUtilities.dp(20);
+                editorParams.rightMargin = AndroidUtilities.dp(20);
+                wrapper.addView(draftEditor, editorParams);
+                new AlertDialog.Builder(getParentActivity(), themeDelegate)
+                        .setTitle("Editar e Enviar")
+                        .setView(wrapper)
+                        .setNegativeButton("Cancelar", null)
+                        .setPositiveButton("Escolher destinatários", (dialog, which) -> {
+                            String editedText = draftEditor.getText().toString();
+                            if (TextUtils.isEmpty(editedText.trim())) {
+                                BulletinFactory.of(ChatActivity.this).createErrorBulletin("A mensagem não pode ficar vazia.").show();
+                                return;
+                            }
+                            ShareAlert share = new ShareAlert(getParentActivity(),
+                                    (ArrayList<MessageObject>) null, editedText, false, null, false);
+                            showDialog(share);
+                        })
+                        .show();
+                break;
+            }
             case OPTION_ULTRATEL_BULK: {
                 if (!BuildVars.isBetaApp() || !selectedObject.canForwardMessage() || isPeerNoForwards()) break;
                 ArrayList<MessageObject> bulkMessages = new ArrayList<>();
@@ -46621,6 +46659,14 @@ public class ChatActivity extends BaseFragment implements
                 if (message.canEditMessage(currentChat) && message.type != MessageObject.TYPE_POLL || chatMode == MODE_WELCOME_MESSAGES) {
                     items.add(LocaleController.getString(R.string.Edit));
                     options.add(OPTION_EDIT);
+                    icons.add(R.drawable.msg_edit);
+                }
+                if (BuildVars.isBetaApp() && canForward && selectedObject != null
+                        && selectedObject.type == 0 && selectedObject.messageOwner != null
+                        && !selectedObject.messageOwner.noforwards && !isPeerNoForwards()
+                        && !TextUtils.isEmpty(selectedObject.messageOwner.message)) {
+                    items.add("Editar e Enviar");
+                    options.add(OPTION_ULTRATEL_EDIT_AND_SEND);
                     icons.add(R.drawable.msg_edit);
                 }
                 if (BuildVars.isBetaApp() && canForward && selectedObject != null && selectedObject.canForwardMessage()) {
