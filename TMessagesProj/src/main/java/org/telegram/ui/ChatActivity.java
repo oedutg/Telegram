@@ -1245,6 +1245,7 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_RETRY = 0;
     public final static int OPTION_DELETE = 1;
     public final static int OPTION_FORWARD = 2;
+    private static final int OPTION_ULTRATEL_BULK = 100501;
     public final static int OPTION_COPY = 3;
     public final static int OPTION_SAVE_TO_GALLERY = 4;
     public final static int OPTION_APPLY_LOCALIZATION_OR_THEME = 5;
@@ -34293,6 +34294,21 @@ public class ChatActivity extends BaseFragment implements
         }
         boolean preserveDim = false;
         switch (option) {
+            case OPTION_ULTRATEL_BULK: {
+                if (!BuildVars.isBetaApp() || !selectedObject.canForwardMessage() || isPeerNoForwards()) break;
+                ArrayList<MessageObject> bulkMessages = new ArrayList<>();
+                if (selectedObjectGroup != null) {
+                    bulkMessages.addAll(selectedObjectGroup.messages);
+                } else {
+                    bulkMessages.add(selectedObject);
+                }
+                ShareAlert bulkAlert = new ShareAlert(getContext(), ChatActivity.this,
+                    bulkMessages, null, null, ChatObject.isChannel(currentChat),
+                    null, null, false, false, false, null, themeDelegate);
+                bulkAlert.setUltraTelBulkMode(true);
+                showDialog(bulkAlert);
+                break;
+            }
             case OPTION_RETRY: {
                 final MessageObject object = selectedObject;
                 final MessageObject.GroupedMessages group = selectedObjectGroup;
@@ -46606,6 +46622,11 @@ public class ChatActivity extends BaseFragment implements
                     items.add(LocaleController.getString(R.string.Edit));
                     options.add(OPTION_EDIT);
                     icons.add(R.drawable.msg_edit);
+                }
+                if (BuildVars.isBetaApp() && canForward && selectedObject != null && selectedObject.canForwardMessage()) {
+                    items.add("Envio múltiplo");
+                    options.add(OPTION_ULTRATEL_BULK);
+                    icons.add(R.drawable.msg_forward);
                 }
                 if (ChatObject.isMonoForum(currentChat) && selectedObject.getGroupId() == 0 && selectedObjectGroup == null && message != null && message.messageOwner != null && message.messageOwner.suggested_post == null && message.messageOwner.action == null) {
                     items.add(LocaleController.getString(R.string.EditOfferAdd));
