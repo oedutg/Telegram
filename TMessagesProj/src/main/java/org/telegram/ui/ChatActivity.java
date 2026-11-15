@@ -1248,6 +1248,7 @@ public class ChatActivity extends BaseFragment implements
     private static final int OPTION_ULTRATEL_BULK = 100501;
     private static final int OPTION_ULTRATEL_EDIT_AND_SEND = 100502;
     private static final int OPTION_ULTRATEL_DIRECT_FORWARD = 100503;
+    private boolean ultraTelMediaComposerActive;
     public final static int OPTION_COPY = 3;
     public final static int OPTION_SAVE_TO_GALLERY = 4;
     public final static int OPTION_APPLY_LOCALIZATION_OR_THEME = 5;
@@ -3346,6 +3347,10 @@ public class ChatActivity extends BaseFragment implements
             messageMetricsView.finish();
         }
         if (chatActivityEnterView != null) {
+            // A pending recipient picker must not leave an interceptor behind.
+            ultraTelMediaComposerActive = false;
+            chatActivityEnterView.setUltraTelTextSendInterceptor(null);
+            chatActivityEnterView.setUltraTelMediaPreview(null, 0, null);
             chatActivityEnterView.onDestroy();
         }
         if (avatarContainer != null) {
@@ -34288,6 +34293,57 @@ public class ChatActivity extends BaseFragment implements
             }
         }
         MediaController.saveFile(path, getParentActivity(), messageObject.isVideo() ? 1 : 0, null, null);
+    }
+
+    /**
+     * Turbo Tel's ForwardEditing (action 400) keeps the caption in the
+     * source chat's input field, then switches to the recipient grid when
+     * Send is pressed. We reproduce that UI without mutating the source
+     * MessageObject or sending anything to the source conversation.
+     */
+    public void startUltraTelMediaCompose(ArrayList<MessageObject> sources) {
+        if (!BuildVars.isBetaApp() || sources == null || sources.isEmpty()
+                || getParentActivity() == null || chatActivityEnterView == null) {
+            return;
+        }
+        if (ultraTelMediaComposerActive || !TextUtils.isEmpty(chatActivityEnterView.getFieldText())) {
+            android.widget.Toast.makeText(getParentActivity(),
+                    "Conclua ou cancele o rascunho atual antes de Editar e Enviar.",
+                    android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        final ArrayList<MessageObject> savedMedia = new ArrayList<>(sources);
+        for (MessageObject item : savedMedia) {
+            if (!UltraTelEditAndSendController.canOffer(item, null)) {
+                return;
+            }
+        }
+
+        final MessageObject first = savedMedia.get(0);
+        ultraTelMediaComposerActive = true;
+        final Runnable clearDraft = () -> {
+            if (!ultraTelMediaComposerActive || chatActivityEnterView == null) return;
+            ultraTelMediaComposerActive = false;
+            chatActivityEnterView.setUltraTelTextSendInterceptor(null);
+            chatActivityEnterView.setUltraTelMediaPreview(null, 0, null);
+            chatActivityEnterView.setFieldText("");
+        };
+
+        chatActivityEnterView.setUltraTelMediaPreview(first, savedMedia.size(), clearDraft);
+        chatActivityEnterView.setFieldText(first.messageOwner.message == null
+                ? "" : first.messageOwner.message);
+        chatActivityEnterView.setUltraTelTextSendInterceptor(edited -> {
+            if (!ultraTelMediaComposerActive || getParentActivity() == null) return;
+            UltraTelEditAndSendController.openRemoteMediaRecipientPicker(
+                    ChatActivity.this, savedMedia, edited, clearDraft);
+        });
+        chatActivityEnterView.setFieldFocused();
+        AndroidUtilities.runOnUIThread(() -> {
+            if (ultraTelMediaComposerActive && chatActivityEnterView != null
+                    && getParentActivity() != null) {
+                chatActivityEnterView.openKeyboard();
+            }
+        }, 150);
     }
 
     private void processSelectedOption(int option) {
