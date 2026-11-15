@@ -89,48 +89,7 @@ public final class UltraTelEditAndSendController {
         host.startUltraTelMediaCompose(sources);
         return;
 
-        /*
-        UltraTelMediaDraft draft = UltraTelMediaDraft.fromMessages(sources, host.getCurrentAccount());
-        if (draft == null) {
-            Toast.makeText(host.getParentActivity(),
-                    "Baixe todas as mídias antes de editar e enviar. Mensagens protegidas não são permitidas.",
-                    Toast.LENGTH_LONG).show();
-            return;
-        }
 
-        ArrayList<MediaController.PhotoEntry> entries = new ArrayList<>();
-        CharSequence initialCaption = "";
-        for (UltraTelMediaDraft.Item item : draft.getItems()) {
-            if (item.file == null || !item.file.isFile()) {
-                Toast.makeText(host.getParentActivity(), "Arquivo de mídia indisponível.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            // The native editor handles photos and videos. MP4 animations are
-            // edited as videos; static WEBP stickers are edited as images.
-            // Vector TGS stickers cannot be rasterized by the photo editor.
-            String name = item.file.getName().toLowerCase(java.util.Locale.ROOT);
-            if (item.sticker && name.endsWith(".tgs")) {
-                Toast.makeText(host.getParentActivity(),
-                        "Figurinha animada TGS ainda não pode ser editada como imagem.",
-                        Toast.LENGTH_LONG).show();
-                return;
-            }
-            boolean isVideo = item.video || (item.gif && (name.endsWith(".mp4") || name.endsWith(".webm")))
-                    || (item.sticker && name.endsWith(".webm"));
-            MediaController.PhotoEntry entry = new MediaController.PhotoEntry(
-                    0, 0, 0, item.file.getAbsolutePath(), 0, isVideo, 0, 0, 0);
-            entry.caption = item.caption;
-            if (isVideo) {
-                entry.duration = (int) item.source.getDuration();
-            }
-            entries.add(entry);
-            if (TextUtils.isEmpty(initialCaption) && !TextUtils.isEmpty(item.caption)) {
-                initialCaption = item.caption;
-            }
-        }
-        if (entries.isEmpty()) return;
-        openMediaEditor(host, entries, initialCaption);
-        */
     }
 
     /**
