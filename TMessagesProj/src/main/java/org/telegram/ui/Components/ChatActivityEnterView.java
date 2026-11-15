@@ -131,6 +131,7 @@ import org.telegram.messenger.Emoji;
 import org.telegram.messenger.FileLoader;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
+import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaController;
@@ -248,13 +249,16 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     private UltraTelTextSendInterceptor ultraTelTextSendInterceptor;
+    private FrameLayout ultraTelMediaPreview;
+    private boolean ultraTelOldForceShowSendButton;
+    private int ultraTelOldComposerTopMargin;
     private boolean ultraTelTextSendWatcherInstalled;
     private final TextWatcher ultraTelTextSendClearWatcher = new TextWatcher() {
         @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
         @Override public void onTextChanged(CharSequence text, int start, int before, int count) {
             // Clearing the composer cancels special edit-and-send mode, so
             // subsequent normal typing can never be captured accidentally.
-            if (ultraTelTextSendInterceptor != null && TextUtils.isEmpty(text)) {
+            if (ultraTelTextSendInterceptor != null && ultraTelMediaPreview == null && TextUtils.isEmpty(text)) {
                 ultraTelTextSendInterceptor = null;
             }
         }
@@ -268,6 +272,80 @@ public class ChatActivityEnterView extends FrameLayout implements
             messageEditText.addTextChangedListener(ultraTelTextSendClearWatcher);
             ultraTelTextSendWatcherInstalled = true;
         }
+    }
+
+    /**
+     * Pro Forward's media preview lives ABOVE the normal text input, just as
+     * in the source chat. It uses Telegram's thumbnail cache; the full media
+     * file is never saved to the device gallery.
+     */
+    public void setUltraTelMediaPreview(MessageObject source, int count, Runnable onCancel) {
+        if (!BuildVars.isBetaApp() || textFieldContainer == null ||
+                messageEditTextContainer == null) {
+            return;
+        }
+        if (ultraTelMediaPreview != null) {
+            textFieldContainer.removeView(ultraTelMediaPreview);
+            ultraTelMediaPreview = null;
+            FrameLayout.LayoutParams existing = (FrameLayout.LayoutParams) messageEditTextContainer.getLayoutParams();
+            existing.topMargin = ultraTelOldComposerTopMargin;
+            messageEditTextContainer.setLayoutParams(existing);
+            setForceShowSendButton(ultraTelOldForceShowSendButton, false);
+        }
+        if (source == null) {
+            return;
+        }
+
+        FrameLayout.LayoutParams inputParams = (FrameLayout.LayoutParams) messageEditTextContainer.getLayoutParams();
+        ultraTelOldComposerTopMargin = inputParams.topMargin;
+        inputParams.topMargin += dp(72);
+        messageEditTextContainer.setLayoutParams(inputParams);
+
+        FrameLayout preview = new FrameLayout(getContext());
+        preview.setBackground(Theme.createRoundRectDrawable(dp(12),
+                getThemedColor(Theme.key_chat_messagePanelBackground)));
+
+        BackupImageView thumbnail = new BackupImageView(getContext());
+        thumbnail.setRoundRadius(dp(7));
+        TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(source.photoThumbs, 100);
+        if (size != null) {
+            thumbnail.setImage(ImageLocation.getForObject(size, source.photoThumbsObject),
+                    "64_64", null, null, null, 0, 1, source);
+        }
+        preview.addView(thumbnail, LayoutHelper.createFrame(55, 55,
+                Gravity.LEFT | Gravity.CENTER_VERTICAL, 8, 0, 0, 0));
+
+        TextView description = new TextView(getContext());
+        description.setTextColor(getThemedColor(Theme.key_chat_messagePanelText));
+        description.setTextSize(14);
+        description.setMaxLines(2);
+        description.setEllipsize(TextUtils.TruncateAt.END);
+        String type = source.isVideo() ? "Vídeo" : source.isGif() ? "GIF" : "Foto";
+        description.setText(count > 1 ? "Editar e Enviar • " + count + " mídias"
+                : "Editar e Enviar • " + type);
+        description.setGravity(Gravity.CENTER_VERTICAL);
+        preview.addView(description, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 58,
+                Gravity.CENTER_VERTICAL, 73, 0, 45, 0));
+
+        TextView cancel = new TextView(getContext());
+        cancel.setText("×");
+        cancel.setTextSize(25);
+        cancel.setGravity(Gravity.CENTER);
+        cancel.setContentDescription("Cancelar Editar e Enviar");
+        cancel.setTextColor(getThemedColor(Theme.key_chat_messagePanelText));
+        cancel.setOnClickListener(v -> {
+            if (onCancel != null) onCancel.run();
+        });
+        preview.addView(cancel, LayoutHelper.createFrame(42, 58,
+                Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 4, 0));
+
+        ultraTelMediaPreview = preview;
+        textFieldContainer.addView(preview, LayoutHelper.createFrame(
+                LayoutHelper.MATCH_PARENT, 64, Gravity.TOP | Gravity.LEFT,
+                9, 3, DEFAULT_HEIGHT + 10, 0));
+        ultraTelOldForceShowSendButton = forceShowSendButton;
+        setForceShowSendButton(true, false);
+        textFieldContainer.requestLayout();
     }
 
     private int commonInputType;
@@ -7420,8 +7498,9 @@ public class ChatActivityEnterView extends FrameLayout implements
             // Intercept BEFORE native sending and paid-message confirmation.
             // A cancelled recipient picker must not send anything or erase the draft.
             CharSequence draft = messageEditText == null ? null : messageEditText.getTextToUse();
-            if (draft != null && !TextUtils.isEmpty(draft.toString().trim())) {
-                ultraTelTextSendInterceptor.onChooseRecipients(draft);
+            if (ultraTelMediaPreview != null ||
+                    draft != null && !TextUtils.isEmpty(draft.toString().trim())) {
+                ultraTelTextSendInterceptor.onChooseRecipients(draft == null ? "" : draft);
             }
             return true;
         }
