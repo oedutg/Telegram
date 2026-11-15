@@ -34289,6 +34289,97 @@ public class ChatActivity extends BaseFragment implements
         MediaController.saveFile(path, getParentActivity(), messageObject.isVideo() ? 1 : 0, null, null);
     }
 
+    /**
+     * Opens Telegram's native photo/video editor on the message's local media.
+     * PhotoViewer edits a new PhotoEntry; the original MessageObject is never
+     * passed as an editable target and the original cache file is not deleted.
+     */
+    private void openUltraTelMediaEditor(final MessageObject original) {
+        if (!BuildVars.isBetaApp() || original == null || original.messageOwner == null
+                || getParentActivity() == null || !(original.isPhoto() || (original.isVideo() && !original.isGif()))) {
+            return;
+        }
+
+        File sourceFile = null;
+        String attachPath = original.messageOwner.attachPath;
+        if (!TextUtils.isEmpty(attachPath)) {
+            File attached = new File(attachPath);
+            if (attached.isFile()) {
+                sourceFile = attached;
+            }
+        }
+        if (sourceFile == null) {
+            File cached = FileLoader.getInstance(currentAccount).getPathToMessage(original.messageOwner);
+            if (cached != null && cached.isFile()) {
+                sourceFile = cached;
+            }
+        }
+        if (sourceFile == null || !sourceFile.isFile()) {
+            Toast.makeText(getParentActivity(), "Baixe a mídia antes de usar Editar e Enviar.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        Pair<Integer, Integer> orientation = AndroidUtilities.getImageOrientation(sourceFile);
+        boolean video = original.isVideo();
+        MediaController.PhotoEntry entry = new MediaController.PhotoEntry(
+                0, -1, 0, sourceFile.getAbsolutePath(),
+                video || orientation == null ? 0 : orientation.first,
+                video, 0, 0, 0
+        );
+        if (orientation != null) {
+            entry.setOrientation(orientation);
+        }
+        entry.caption = original.messageOwner.message;
+        ArrayList<Object> entries = new ArrayList<>();
+        entries.add(entry);
+
+        PhotoViewer viewer = PhotoViewer.getInstance();
+        viewer.setParentActivity(this, themeDelegate);
+        viewer.openPhotoForSelect(entries, 0, 2, false, new PhotoViewer.EmptyPhotoViewerProvider() {
+            private boolean handedOff;
+
+            @Override
+            public void sendButtonPressed(int index, VideoEditedInfo videoEditedInfo, boolean notify, int scheduleDate, int scheduleRepeatPeriod, boolean forceDocument) {
+                if (handedOff || getParentActivity() == null) {
+                    return;
+                }
+                String mediaPath = entry.isVideo ? entry.path : (entry.imagePath != null ? entry.imagePath : entry.path);
+                if (TextUtils.isEmpty(mediaPath) || !new File(mediaPath).isFile()) {
+                    Toast.makeText(getParentActivity(), "Não foi possível preparar a mídia editada.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+
+                SendMessagesHelper.SendingMediaInfo media = new SendMessagesHelper.SendingMediaInfo();
+                media.path = mediaPath;
+                media.imagePath = entry.imagePath;
+                media.thumbPath = entry.thumbPath;
+                media.caption = entry.caption == null ? "" : entry.caption.toString();
+                media.entities = entry.entities;
+                media.masks = entry.stickers;
+                media.videoEditedInfo = videoEditedInfo;
+                media.isVideo = entry.isVideo;
+                media.ttl = entry.ttl;
+                media.hasMediaSpoilers = entry.hasSpoiler;
+                media.canDeleteAfter = false;
+
+                ArrayList<SendMessagesHelper.SendingMediaInfo> mediaItems = new ArrayList<>();
+                mediaItems.add(media);
+                ShareAlert shareAlert = ShareAlert.createUltraTelMediaDraft(getParentActivity(), mediaItems);
+                if (shareAlert == null) {
+                    Toast.makeText(getParentActivity(), "Não foi possível abrir a seleção de destinatários.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                handedOff = true;
+                showDialog(shareAlert);
+            }
+
+            @Override
+            public void willHidePhotoViewer() {
+                // The source belongs to Telegram's message cache; never delete it here.
+            }
+        }, this);
+    }
+
     private void processSelectedOption(int option) {
         if (selectedObject == null || getParentActivity() == null) {
             return;
@@ -34298,9 +34389,15 @@ public class ChatActivity extends BaseFragment implements
             case OPTION_ULTRATEL_EDIT_AND_SEND: {
                 final MessageObject original = selectedObject;
                 if (!BuildVars.isBetaApp() || original == null || original.messageOwner == null
-                        || !original.canForwardMessage() || original.type != 0
-                        || original.messageOwner.noforwards || isPeerNoForwards()
-                        || TextUtils.isEmpty(original.messageOwner.message)) {
+                        || !original.canForwardMessage()
+                        || original.messageOwner.noforwards || isPeerNoForwards()) {
+                    break;
+                }
+                if (original.isPhoto() || (original.isVideo() && !original.isGif())) {
+                    openUltraTelMediaEditor(original);
+                    break;
+                }
+                if (original.type != 0 || TextUtils.isEmpty(original.messageOwner.message)) {
                     break;
                 }
                 final EditText draftEditor = new EditText(getParentActivity());
@@ -46664,9 +46761,11 @@ public class ChatActivity extends BaseFragment implements
                 }
                 if (BuildVars.isBetaApp() && canForward && selectedObject != null
                         && selectedObject.canForwardMessage()
-                        && selectedObject.type == 0 && selectedObject.messageOwner != null
+                        && selectedObject.messageOwner != null
                         && !selectedObject.messageOwner.noforwards && !isPeerNoForwards()
-                        && !TextUtils.isEmpty(selectedObject.messageOwner.message)) {
+                        && ((selectedObject.type == 0 && !TextUtils.isEmpty(selectedObject.messageOwner.message))
+                            || selectedObject.isPhoto()
+                            || (selectedObject.isVideo() && !selectedObject.isGif()))) {
                     items.add("Editar e Enviar");
                     options.add(OPTION_ULTRATEL_EDIT_AND_SEND);
                     icons.add(R.drawable.msg_edit);
@@ -47034,10 +47133,12 @@ public class ChatActivity extends BaseFragment implements
                 // This menu is used by another message category. Keep the
                 // UltraTel actions in the same order as the standard menu.
                 if (BuildVars.isBetaApp() && canForward && selectedObject != null
-                        && selectedObject.type == 0 && selectedObject.messageOwner != null
+                        && selectedObject.messageOwner != null
                         && selectedObject.canForwardMessage()
                         && !selectedObject.messageOwner.noforwards && !isPeerNoForwards()
-                        && !TextUtils.isEmpty(selectedObject.messageOwner.message)) {
+                        && ((selectedObject.type == 0 && !TextUtils.isEmpty(selectedObject.messageOwner.message))
+                            || selectedObject.isPhoto()
+                            || (selectedObject.isVideo() && !selectedObject.isGif()))) {
                     items.add("Editar e Enviar");
                     options.add(OPTION_ULTRATEL_EDIT_AND_SEND);
                     icons.add(R.drawable.msg_edit);
