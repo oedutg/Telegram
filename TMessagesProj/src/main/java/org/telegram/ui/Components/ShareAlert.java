@@ -1142,8 +1142,9 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             ultraTelSelectAllSwitch.setOnCheckedChangeListener((button, checked) -> {
                 if (!ultraTelUpdatingSelectAll) setUltraTelAllRecipientsSelected(checked);
             });
-            // Only the bulk selector uses this legacy switch; stay within the header.
-            frameLayout.addView(ultraTelSelectAllSwitch, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 40, Gravity.BOTTOM | Gravity.RIGHT, 0, 0, 14, 10));
+            // Preserve Envio Múltiplo's original placement; the Editar e Enviar
+            // toolbar is independent and never uses this legacy switch.
+            frameLayout.addView(ultraTelSelectAllSwitch, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 40, Gravity.TOP | Gravity.RIGHT, 0, 49, 14, 0));
         }
         topicsBackActionBar = new ActionBar(context);
         topicsBackActionBar.setOccupyStatusBar(false);
