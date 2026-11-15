@@ -198,9 +198,12 @@ public final class UltraTelEditAndSendController {
         // Unlike the bulk sender, this path sends locally edited copies.
         ShareAlert picker = new ShareAlert(host.getParentActivity(),
                 (ArrayList<MessageObject>) null, "", false, null, false);
-        picker.setUltraTelEditedMediaRecipientCallback((dialogIds, withSound) ->
-                dispatchEditedMedia(host, entries, initialCaption,
-                        sendAsDocumentFromEditor, dialogIds, withSound));
+        picker.setUltraTelEditedMediaRecipientCallback((dialogIds, withSound, pickerCaption) -> {
+            CharSequence caption = !TextUtils.isEmpty(pickerCaption)
+                    ? pickerCaption : initialCaption;
+            return dispatchEditedMedia(host, entries, caption,
+                    sendAsDocumentFromEditor, dialogIds, withSound);
+        });
         host.showDialog(picker);
     }
 
