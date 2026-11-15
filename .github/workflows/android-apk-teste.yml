@@ -1,6 +1,11 @@
 name: UltraTel Android - APK
 
 on:
+  push:
+    branches:
+      - feature/ultratel-beta-v1
+    paths:
+      - scripts/ultratel-beta-test-trigger.txt
   workflow_dispatch:
     inputs:
       compile_only:
@@ -106,7 +111,7 @@ jobs:
             -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
 
       - name: Compilar APK UltraTel (afatRelease)
-        if: github.event_name == 'workflow_dispatch' && inputs.compile_only != true
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.compile_only != true)
         run: |
           chmod +x ./gradlew
           ./gradlew :TMessagesProj_App:assembleAfatRelease \
@@ -117,7 +122,7 @@ jobs:
             -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
 
       - name: Disponibilizar APK
-        if: github.event_name == 'workflow_dispatch' && inputs.compile_only != true
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.compile_only != true)
         uses: actions/upload-artifact@v4
         with:
           name: ultratel-android-release
