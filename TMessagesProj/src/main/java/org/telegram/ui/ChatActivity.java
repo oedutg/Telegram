@@ -34317,34 +34317,46 @@ public class ChatActivity extends BaseFragment implements
                         || TextUtils.isEmpty(original.messageOwner.message)) {
                     break;
                 }
-                final EditText draftEditor = new EditText(getParentActivity());
-                draftEditor.setSingleLine(false);
-                draftEditor.setMinLines(3);
-                draftEditor.setMaxLines(12);
-                draftEditor.setText(original.messageOwner.message);
-                draftEditor.setSelection(draftEditor.length());
-                final android.widget.FrameLayout wrapper = new android.widget.FrameLayout(getParentActivity());
-                android.widget.FrameLayout.LayoutParams editorParams = new android.widget.FrameLayout.LayoutParams(
-                        android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                        android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
-                editorParams.leftMargin = AndroidUtilities.dp(20);
-                editorParams.rightMargin = AndroidUtilities.dp(20);
-                wrapper.addView(draftEditor, editorParams);
-                new AlertDialog.Builder(getParentActivity(), themeDelegate)
-                        .setTitle("Editar e Enviar")
-                        .setView(wrapper)
-                        .setNegativeButton("Cancelar", null)
-                        .setPositiveButton("Escolher destinatários", (dialog, which) -> {
-                            String editedText = draftEditor.getText().toString();
-                            if (TextUtils.isEmpty(editedText.trim())) {
-                                android.widget.Toast.makeText(getParentActivity(), "A mensagem não pode ficar vazia.", android.widget.Toast.LENGTH_SHORT).show();
-                                return;
+                if (chatActivityEnterView == null) {
+                    break;
+                }
+                // The native composer is the editor. Never overwrite an
+                // existing draft, and never send to the source chat implicitly.
+                final CharSequence pendingDraft = chatActivityEnterView.getFieldText();
+                if (!TextUtils.isEmpty(pendingDraft)) {
+                    android.widget.Toast.makeText(getParentActivity(),
+                            "Salve ou limpe seu rascunho atual antes de usar Editar e Enviar.",
+                            android.widget.Toast.LENGTH_LONG).show();
+                    break;
+                }
+                chatActivityEnterView.setFieldText(original.messageOwner.message);
+                chatActivityEnterView.setUltraTelTextSendInterceptor(editedDraft -> {
+                    if (getParentActivity() == null || TextUtils.isEmpty(editedDraft)
+                            || TextUtils.isEmpty(editedDraft.toString().trim())) {
+                        return;
+                    }
+                    final String editedText = editedDraft.toString();
+                    final ShareAlert share = new ShareAlert(getParentActivity(),
+                            (ArrayList<MessageObject>) null, editedText, false, null, false);
+                    share.setDelegate(new ShareAlert.ShareAlertDelegate() {
+                        @Override
+                        public void didShare() {
+                            // Clear only after the user actually shares.
+                            // Cancelling keeps the editable text in the composer.
+                            if (chatActivityEnterView != null) {
+                                chatActivityEnterView.setUltraTelTextSendInterceptor(null);
+                                chatActivityEnterView.setFieldText("");
                             }
-                            ShareAlert share = new ShareAlert(getParentActivity(),
-                                    (ArrayList<MessageObject>) null, editedText, false, null, false);
-                            showDialog(share);
-                        })
-                        .show();
+                        }
+                    });
+                    showDialog(share);
+                });
+                chatActivityEnterView.setFieldFocused();
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (chatActivityEnterView != null && getParentActivity() != null) {
+                        chatActivityEnterView.openKeyboard();
+                    }
+                }, 150);
                 break;
             }
             case OPTION_ULTRATEL_BULK: {
