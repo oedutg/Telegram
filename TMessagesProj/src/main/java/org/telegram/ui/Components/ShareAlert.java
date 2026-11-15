@@ -71,6 +71,7 @@ import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BotWebViewVibrationEffect;
+import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.DialogObject;
@@ -1231,6 +1232,9 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 if (dy != 0) {
                     updateLayout();
                     previousScrollOffsetY = scrollOffsetY;
+                    if (dy > 0 && listAdapter != null) {
+                        listAdapter.loadNextPageIfNeeded(layoutManager.findLastVisibleItemPosition());
+                    }
                 }
                 if (Bulletin.getVisibleBulletin() != null && Bulletin.getVisibleBulletin().getLayout() != null && Bulletin.getVisibleBulletin().getLayout().getParent() instanceof View && ((View) Bulletin.getVisibleBulletin().getLayout().getParent()).getParent() == bulletinContainer2) {
                     Bulletin.hideVisible();
@@ -2903,6 +2907,8 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
         private Context context;
         private int currentCount;
+        private static final int ULTRATEL_PAGE_SIZE = 20;
+        private int visibleDialogsCount = ULTRATEL_PAGE_SIZE;
         private ArrayList<TLRPC.Dialog> dialogs = new ArrayList<>();
         private LongSparseArray<TLRPC.Dialog> dialogsMap = new LongSparseArray<>();
 
@@ -2912,6 +2918,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
 
         public void fetchDialogs() {
+            visibleDialogsCount = ULTRATEL_PAGE_SIZE;
             dialogs.clear();
             dialogsMap.clear();
             long selfUserId = UserConfig.getInstance(currentAccount).clientUserId;
@@ -2974,9 +2981,18 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             notifyDataSetChanged();
         }
 
+        public void loadNextPageIfNeeded(int lastVisiblePosition) {
+            if (!BuildVars.isBetaApp() || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
+                return;
+            }
+            int oldCount = visibleDialogsCount;
+            visibleDialogsCount = Math.min(dialogs.size(), visibleDialogsCount + ULTRATEL_PAGE_SIZE);
+            notifyItemRangeInserted(oldCount + 1, visibleDialogsCount - oldCount);
+        }
+
         @Override
         public int getItemCount() {
-            int count = dialogs.size();
+            int count = BuildVars.isBetaApp() ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
             if (count != 0) {
                 count++;
             }
