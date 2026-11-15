@@ -5,7 +5,7 @@ import android.content.SharedPreferences;
 
 /**
  * Local, per-account guard for explicitly confirmed UltraTel Beta bulk sends.
- * Call markCompleted only after a campaign has actually been dispatched.
+ * Reserve a campaign immediately before dispatch; the reservation is persisted synchronously.
  * This is a client-side safeguard, not a server-enforced anti-spam guarantee.
  */
 public final class UltraTelBulkSendGuard {
@@ -48,9 +48,8 @@ public final class UltraTelBulkSendGuard {
                 && remainingCooldownMs(context, account) == 0L;
     }
 
-    public static synchronized boolean markCompleted(Context context, int account) {
-        if (context == null || account < 0 || !BuildVars.isBetaApp()
-                || remainingCooldownMs(context, account) > 0L) {
+    public static synchronized boolean tryReserveCampaign(Context context, int account, int recipientCount) {
+        if (context == null || account < 0 || !canStart(context, account, recipientCount)) {
             return false;
         }
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
