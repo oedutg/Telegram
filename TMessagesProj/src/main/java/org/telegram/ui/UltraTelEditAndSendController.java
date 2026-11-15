@@ -17,11 +17,12 @@ import org.telegram.ui.Components.ShareAlert;
 import java.util.ArrayList;
 
 /**
- * Creates a NEW outgoing media message from a locally available source.
- * Source messages are never edited, forwarded, or modified.
+ * UltraTel Beta's Editar e Enviar flow, modeled on Turbo Tel's ForwardEditing:
+ * edit the caption in the chat input, then select recipients in ShareAlert.
  *
- * DialogsActivity owns the existing Telegram recipient picker, caption input
- * and PhotoViewer editor; the ordinary media send pipeline publishes the result.
+ * Original messages are never modified. New outgoing messages use Telegram's
+ * remote photo/document references, so the feature needs no gallery save,
+ * separate PhotoViewer modal, or duplicate local download.
  */
 public final class UltraTelEditAndSendController {
     private UltraTelEditAndSendController() {
