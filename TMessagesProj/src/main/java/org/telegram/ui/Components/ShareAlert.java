@@ -180,6 +180,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     protected LongSparseArray<TLRPC.Dialog> selectedDialogs = new LongSparseArray<>();
     protected Map<TLRPC.Dialog, TLRPC.TL_forumTopic> selectedDialogTopics = new HashMap<>();
     private SwitchView switchView;
+    private boolean ultraTelBulkMode;
     private Switch ultraTelSelectAllSwitch;
     private boolean ultraTelUpdatingSelectAll;
     private int containerViewTop = -1;
@@ -1094,6 +1095,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         if (BuildVars.isBetaApp()) {
             ultraTelSelectAllSwitch = new Switch(context);
             ultraTelSelectAllSwitch.setText("Selecionar todos");
+            ultraTelSelectAllSwitch.setVisibility(View.GONE);
             ultraTelSelectAllSwitch.setTextColor(getThemedColor(Theme.key_dialogTextBlack));
             ultraTelSelectAllSwitch.setOnCheckedChangeListener((button, checked) -> {
                 if (!ultraTelUpdatingSelectAll) setUltraTelAllRecipientsSelected(checked);
@@ -1962,8 +1964,17 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     }
 
     private int shiftDp = 4;
+    /** Enable only from an explicit UltraTel Beta bulk-send entry point. */
+    public void setUltraTelBulkMode(boolean enabled) {
+        ultraTelBulkMode = enabled && BuildVars.isBetaApp();
+        if (ultraTelSelectAllSwitch != null) {
+            ultraTelSelectAllSwitch.setVisibility(ultraTelBulkMode ? View.VISIBLE : View.GONE);
+        }
+        if (listAdapter != null) listAdapter.fetchDialogs();
+    }
+
     private void setUltraTelAllRecipientsSelected(boolean checked) {
-        if (!BuildVars.isBetaApp() || listAdapter == null) return;
+        if (!ultraTelBulkMode || listAdapter == null) return;
         if (checked) {
             int eligible = 0;
             for (TLRPC.Dialog dialog : listAdapter.dialogs) {
@@ -3030,7 +3041,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
 
         public void loadNextPageIfNeeded(int lastVisiblePosition) {
-            if (!BuildVars.isBetaApp() || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
+            if (!ultraTelBulkMode || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
                 return;
             }
             int oldCount = visibleDialogsCount;
@@ -3040,7 +3051,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
         @Override
         public int getItemCount() {
-            int count = BuildVars.isBetaApp() ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
+            int count = ultraTelBulkMode ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
             if (count != 0) {
                 count++;
             }
