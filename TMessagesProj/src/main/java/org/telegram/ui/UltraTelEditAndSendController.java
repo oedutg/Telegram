@@ -283,12 +283,12 @@ public final class UltraTelEditAndSendController {
         ShareAlert picker = new ShareAlert(host.getParentActivity(),
                 (ArrayList<MessageObject>) null, "", false, null, false);
         picker.setUltraTelEditedMediaRecipientCallback((dialogIds, withSound, pickerComment) -> {
-            String captionText = caption == null ? "" : caption.toString();
-            // A recipient-panel comment supplements the caption rather
-            // than silently replacing the edits made in the source chat.
+            CharSequence captionText = caption == null ? "" : caption;
+            // Retain styled spans from the chat composer. A recipient-panel
+            // comment is appended instead of replacing the original edits.
             if (!TextUtils.isEmpty(pickerComment)) {
-                captionText = captionText.isEmpty() ? pickerComment.toString()
-                        : captionText + "\n" + pickerComment;
+                captionText = TextUtils.isEmpty(captionText) ? pickerComment
+                        : TextUtils.concat(captionText, "\n", pickerComment);
             }
             return sendRemoteMedia(host, safeSources, captionText,
                     dialogIds, withSound, onSent);
@@ -297,7 +297,7 @@ public final class UltraTelEditAndSendController {
     }
 
     private static boolean sendRemoteMedia(ChatActivity host,
-            ArrayList<MessageObject> sources, String caption,
+            ArrayList<MessageObject> sources, CharSequence caption,
             ArrayList<Long> dialogIds, boolean withSound, Runnable onSent) {
         if (host.getParentActivity() == null || dialogIds == null
                 || !UltraTelBulkSendGuard.isWithinRecipientLimit(dialogIds.size())) {
@@ -322,7 +322,7 @@ public final class UltraTelEditAndSendController {
             }
         }
 
-        final String editedCaption = caption == null ? "" : caption;
+        final CharSequence editedCaption = caption == null ? "" : caption;
         AlertsCreator.ensurePaidMessagesMultiConfirmation(
                 host.getCurrentAccount(), paidDialogs, paidMessageCount, prices -> {
                     for (Long did : dialogIds) {
@@ -330,7 +330,7 @@ public final class UltraTelEditAndSendController {
                         long payStars = stars == null ? 0L : stars;
                         for (int index = 0; index < sources.size(); index++) {
                             MessageObject src = sources.get(index);
-                            String itemCaption = index == 0 ? editedCaption :
+                            CharSequence itemCaption = index == 0 ? editedCaption :
                                     (src.messageOwner.message == null ? "" : src.messageOwner.message);
                             CharSequence[] entityText = { itemCaption };
                             ArrayList<TLRPC.MessageEntity> entities =
