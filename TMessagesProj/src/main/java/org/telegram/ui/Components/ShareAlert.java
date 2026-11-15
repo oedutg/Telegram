@@ -182,6 +182,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     protected Map<TLRPC.Dialog, TLRPC.TL_forumTopic> selectedDialogTopics = new HashMap<>();
     private SwitchView switchView;
     private boolean ultraTelBulkMode;
+    private boolean ultraTelDirectForwardMode;
     private boolean ultraTelEditedMediaMode;
     private boolean ultraTelAnimatedStickerMode;
     private boolean ultraTelEditedMediaDispatching;
@@ -2033,6 +2034,17 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 .show();
     }
 
+    /**
+     * Direct Forward uses Telegram's native forward pipeline, with the same
+     * smooth 20-by-20 recipient-grid pagination as Envio múltiplo. Unlike the
+     * bulk campaign, it has no campaign cooldown or private-only restriction.
+     */
+    public void setUltraTelDirectForwardMode(boolean enabled) {
+        ultraTelDirectForwardMode = BuildVars.isBetaApp() && enabled;
+        ultraTelBulkMode = false;
+        if (listAdapter != null) listAdapter.fetchDialogs();
+    }
+
     /** Enable only from an explicit UltraTel Beta bulk-send entry point. */
     public void setUltraTelBulkMode(boolean enabled) {
         ultraTelBulkMode = enabled && BuildVars.isBetaApp();
@@ -3223,7 +3235,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
 
         public void loadNextPageIfNeeded(int lastVisiblePosition) {
-            if ((!ultraTelBulkMode && !ultraTelEditedMediaMode) || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
+            if ((!ultraTelBulkMode && !ultraTelEditedMediaMode && !ultraTelDirectForwardMode) || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
                 return;
             }
             int oldCount = visibleDialogsCount;
@@ -3233,7 +3245,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
         @Override
         public int getItemCount() {
-            int count = (ultraTelBulkMode || ultraTelEditedMediaMode) ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
+            int count = (ultraTelBulkMode || ultraTelEditedMediaMode || ultraTelDirectForwardMode) ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
             if (count != 0) {
                 count++;
             }
