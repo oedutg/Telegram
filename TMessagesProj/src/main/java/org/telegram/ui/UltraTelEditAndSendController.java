@@ -6,6 +6,9 @@ import android.widget.Toast;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
+import org.telegram.messenger.DialogObject;
+import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.UltraTelBulkSendGuard;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MessageObject;
@@ -15,6 +18,7 @@ import org.telegram.messenger.UltraTelMediaDraft;
 import org.telegram.messenger.VideoEditedInfo;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.AlertsCreator;
+import org.telegram.ui.Components.ShareAlert;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -177,74 +181,67 @@ public final class UltraTelEditAndSendController {
     private static void openRecipientPicker(ChatActivity host,
             ArrayList<MediaController.PhotoEntry> entries, CharSequence initialCaption,
             boolean sendAsDocumentFromEditor) {
-        Bundle args = new Bundle();
-        args.putBoolean("onlySelect", true);
-        args.putInt("dialogsType", DialogsActivity.DIALOGS_TYPE_FORWARD);
-        args.putInt("messagesCount", entries.size());
-        // The current sending path targets whole chats; do not silently post
-        // into the wrong topic until topic reply context is handled.
-        args.putBoolean("canSelectTopics", false);
-        DialogsActivity picker = new DialogsActivity(args);
-        picker.setUltraTelEditAndSendPicker();
-        picker.setSharedMedia(entries, initialCaption);
-        final boolean[] dispatched = {false};
+        if (host.getParentActivity() == null) return;
 
-        picker.setDelegate((fragment, dids, message, param, notify, scheduleDate, scheduleRepeatPeriod, topicsFragment) -> {
-            if (dispatched[0] || dids == null || dids.isEmpty()
-                    || !fragment.hasSharedMediaEntries()) {
+        // Reuse the exact grid, touch scrolling, 20-item pagination, search,
+        // individual selection and select-all UI from Envio múltiplo.
+        // Unlike the bulk sender, this path sends locally edited copies.
+        ShareAlert picker = new ShareAlert(host.getParentActivity(),
+                (ArrayList<MessageObject>) null, "", false, null, false);
+        picker.setUltraTelEditedMediaRecipientCallback((dialogIds, withSound) ->
+                dispatchEditedMedia(host, entries, initialCaption,
+                        sendAsDocumentFromEditor, dialogIds, withSound));
+        host.showDialog(picker);
+    }
+
+    private static boolean dispatchEditedMedia(ChatActivity host,
+            ArrayList<MediaController.PhotoEntry> entries, CharSequence caption,
+            boolean asDocument, ArrayList<Long> dialogIds, boolean withSound) {
+        if (host.getParentActivity() == null || dialogIds == null
+                || !UltraTelBulkSendGuard.isWithinRecipientLimit(dialogIds.size())) {
+            return false;
+        }
+
+        if (copyEditedMedia(entries, caption).isEmpty()) {
+            Toast.makeText(host.getParentActivity(),
+                    "A edição não gerou arquivos válidos.", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+
+        final ArrayList<Long> paidDialogs = new ArrayList<>();
+        int paidMessages = 0;
+        for (Long did : dialogIds) {
+            if (did == null || !UltraTelBulkSendGuard.isEligibleRecipient(did)) {
+                Toast.makeText(host.getParentActivity(),
+                        "Selecione apenas conversas privadas.", Toast.LENGTH_SHORT).show();
                 return false;
             }
-            List<MediaController.PhotoEntry> editedEntries = fragment.getSharedMediaEntries();
-            boolean asDocument = sendAsDocumentFromEditor || fragment.isUltraTelSendAsDocument();
-            // Validate every edited output before asking the user to pay/send.
-            if (copyEditedMedia(editedEntries, fragment.getSharedMediaCaption()).isEmpty()) {
-                Toast.makeText(host.getParentActivity(), "A edição não gerou arquivos válidos.", Toast.LENGTH_SHORT).show();
-                return false;
+            MessagesController controller = host.getMessagesController();
+            long price = controller.getSendPaidMessagesStars(did);
+            if (price <= 0) {
+                price = DialogObject.getMessagesStarsPrice(controller.isUserContactBlocked(did));
             }
-            for (MessagesStorage.TopicKey key : dids) {
-                if (key.topicId != 0) {
-                    Toast.makeText(host.getParentActivity(), "Selecione uma conversa sem tópico.", Toast.LENGTH_SHORT).show();
-                    return false;
-                }
-                TLRPC.Chat chat = host.getMessagesController().getChat(-key.dialogId);
-                if (chat != null) {
-                    if (!ChatObject.canWriteToChat(chat)) {
-                        Toast.makeText(host.getParentActivity(), "Sem permissão para enviar nesta conversa.", Toast.LENGTH_SHORT).show();
-                        return false;
-                    }
-                    for (MediaController.PhotoEntry entry : editedEntries) {
-                        boolean forbidden = asDocument ? !ChatObject.canSendDocument(chat)
-                                : (entry.isVideo ? !ChatObject.canSendVideo(chat) : !ChatObject.canSendPhoto(chat));
-                        if (forbidden) {
-                            Toast.makeText(host.getParentActivity(), "Esta conversa não permite o tipo de mídia selecionado.", Toast.LENGTH_SHORT).show();
-                            return false;
-                        }
-                    }
-                }
+            if (price > 0) {
+                paidDialogs.add(did);
+                paidMessages += entries.size();
             }
-            CharSequence finalCaption = fragment.getSharedMediaCaption();
-            if (finalCaption == null) finalCaption = message;
-            final CharSequence caption = finalCaption;
-            // The Telegram confirmation also accounts for paid-message prices.
-            boolean pendingConfirmation = AlertsCreator.ensurePaidMessagesMultiConfirmationTopicKeys(
-                    host.getCurrentAccount(), dids, editedEntries.size(), prices -> {
-                        if (dispatched[0]) return;
-                        dispatched[0] = true;
-                        for (MessagesStorage.TopicKey key : dids) {
-                            ArrayList<SendMessagesHelper.SendingMediaInfo> media = copyEditedMedia(editedEntries, caption);
-                            if (media.isEmpty()) continue;
-                            Long price = prices == null ? null : prices.get(key.dialogId);
-                            SendMessagesHelper.prepareSendingMedia(host.getAccountInstance(), media, key.dialogId,
-                                    null, null, null, null, asDocument, media.size() > 1, null,
-                                    notify, scheduleDate, scheduleRepeatPeriod, 0,
-                                    media.get(0).updateStickersOrder, null, null, 0, false,
-                                    price == null ? 0L : price, 0, null);
-                        }
-                        fragment.finishFragment();
-                    });
-            return !pendingConfirmation;
-        });
-        host.presentFragment(picker);
+        }
+
+        // Preserve paid-message confirmation from the native Telegram pipeline.
+        AlertsCreator.ensurePaidMessagesMultiConfirmation(
+                host.getCurrentAccount(), paidDialogs, paidMessages, prices -> {
+                    for (Long did : dialogIds) {
+                        ArrayList<SendMessagesHelper.SendingMediaInfo> media =
+                                copyEditedMedia(entries, caption);
+                        if (media.isEmpty()) continue;
+                        Long price = prices == null ? null : prices.get(did);
+                        SendMessagesHelper.prepareSendingMedia(host.getAccountInstance(), media, did,
+                                null, null, null, null, asDocument, media.size() > 1, null,
+                                withSound, 0, 0, 0, media.get(0).updateStickersOrder,
+                                null, null, 0, false, price == null ? 0L : price, 0, null);
+                    }
+                });
+        return true;
     }
 
     /**
