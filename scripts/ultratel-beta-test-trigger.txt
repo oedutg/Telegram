@@ -1,2 +1,0 @@
-Build validation: scrolling recipient selector and native Editar e enviar header.
-No stable release.
