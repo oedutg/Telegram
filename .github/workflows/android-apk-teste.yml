@@ -1,15 +1,6 @@
 name: UltraTel Android - APK
 
 on:
-  push:
-    branches:
-      - feature/ultratel-beta-v1
-    paths:
-      - '.github/workflows/android-apk-teste.yml'
-      - 'TMessagesProj/src/main/java/org/telegram/ui/ChatActivity.java'
-      - 'TMessagesProj/src/main/java/org/telegram/ui/DialogsActivity.java'
-      - 'TMessagesProj/src/main/java/org/telegram/ui/UltraTelEditAndSendController.java'
-      - 'TMessagesProj/src/main/java/org/telegram/messenger/UltraTelMediaDraft.java'
   workflow_dispatch:
     inputs:
       compile_only:
@@ -32,8 +23,8 @@ permissions:
   contents: write
 
 concurrency:
-  group: telegram-apk-test-${{ github.ref }}
-  cancel-in-progress: true
+  group: telegram-apk-test-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   build:
