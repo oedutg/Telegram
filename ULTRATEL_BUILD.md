@@ -10,7 +10,7 @@ Nunca ignore alertas de segurança apenas porque o APK compilou.
 ## Ícone do aplicativo (uma imagem apenas)
 
 1. Baixe o PNG preparado `ultratel-launcher.png` na conversa.
-2. Na branch `feature/ultratel-firebase-20261113`, abra
+2. Na branch `feature/ultratel-beta-v1`, abra
    [branding](branding/README.md) no GitHub.
 3. Toque em **Add file → Upload files**, selecione o PNG e confirme o commit
    nessa mesma branch. O caminho final deve ser `branding/ultratel-launcher.png`.
@@ -58,7 +58,7 @@ Não o publique no Git, em Issues ou em chats; copie-o apenas para o secret.
 
 ## 2. Criar quatro GitHub Actions Secrets
 
-No repositório `elenilda10/Telegram`:
+No repositório `oedutg/Telegram`:
 
 **Settings → Secrets and variables → Actions → New repository secret**
 
@@ -78,7 +78,7 @@ extraídos do APK: secrets protegem o repositório e os logs, não o binário.
 ## 3. Compilar depois de configurar os secrets
 
 No GitHub, abra **Actions → Android APK - teste** (nome ainda exibido na branch principal) **→ Run workflow**,
-selecionando a branch `feature/ultratel-firebase-20261113`
+selecionando a branch `feature/ultratel-beta-v1`
 enquanto o PR ainda estiver em rascunho.
 
 O workflow deve falhar **antes de instalar os SDKs** caso um secret esteja ausente
