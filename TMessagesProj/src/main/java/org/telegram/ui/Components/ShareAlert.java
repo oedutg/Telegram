@@ -183,6 +183,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     private SwitchView switchView;
     private boolean ultraTelBulkMode;
     private boolean ultraTelEditedMediaMode;
+    private boolean ultraTelAnimatedStickerMode;
     private boolean ultraTelEditedMediaDispatching;
     private UltraTelEditedMediaRecipientCallback ultraTelEditedMediaCallback;
 
@@ -2049,10 +2050,22 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
      * The 24-hour campaign cooldown is deliberately not applied here.
      */
     public void setUltraTelEditedMediaRecipientCallback(UltraTelEditedMediaRecipientCallback callback) {
+        setUltraTelEditedMediaRecipientCallback(callback, false);
+    }
+
+    /** For animated stickers, show only the scrolling recipient grid and send button. */
+    public void setUltraTelEditedMediaRecipientCallback(
+            UltraTelEditedMediaRecipientCallback callback, boolean animatedSticker) {
         ultraTelEditedMediaMode = BuildVars.isBetaApp() && callback != null;
+        ultraTelAnimatedStickerMode = ultraTelEditedMediaMode && animatedSticker;
         ultraTelEditedMediaCallback = ultraTelEditedMediaMode ? callback : null;
         ultraTelEditedMediaDispatching = false;
         ultraTelBulkMode = false;
+        if (ultraTelAnimatedStickerMode && commentTextView != null) {
+            commentTextView.getEditText().setText("");
+            AndroidUtilities.hideKeyboard(commentTextView.getEditText());
+            commentTextView.hidePopup(true);
+        }
         if (ultraTelSelectAllSwitch != null) {
             ultraTelSelectAllSwitch.setVisibility(ultraTelEditedMediaMode ? View.VISIBLE : View.GONE);
         }
@@ -2583,7 +2596,8 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             }
             // Treat text typed below the recipient grid as the edited media
             // caption, rather than silently discarding it.
-            CharSequence pickerCaption = commentTextView == null ? null : commentTextView.getText();
+            CharSequence pickerCaption = ultraTelAnimatedStickerMode || commentTextView == null
+                    ? null : commentTextView.getText();
             if (ultraTelEditedMediaCallback.sendEditedMedia(recipientIds, withSound, pickerCaption)) {
                 ultraTelEditedMediaDispatching = true;
                 dismiss();
@@ -3022,7 +3036,9 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
         commentTextView.hidePopup(true);
         if (show) {
-            frameLayout2.setVisibility(View.VISIBLE);
+            // The send action floats above the list, without any text field
+            // for animated stickers. Keep writeButtonContainer visible.
+            frameLayout2.setVisibility(ultraTelAnimatedStickerMode ? View.INVISIBLE : View.VISIBLE);
             if (timestampFrameLayout != null && pickerBottom == null) {
                 timestampFrameLayout.setVisibility(View.VISIBLE);
             }
@@ -3040,7 +3056,8 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
         animatorSet = new AnimatorSet();
         ArrayList<Animator> animators = new ArrayList<>();
-        animators.add(ObjectAnimator.ofFloat(frameLayout2, View.ALPHA, show ? 1.0f : 0.0f));
+        animators.add(ObjectAnimator.ofFloat(frameLayout2, View.ALPHA,
+                show && !ultraTelAnimatedStickerMode ? 1.0f : 0.0f));
         if (timestampFrameLayout != null && pickerBottom == null) {
             animators.add(ObjectAnimator.ofFloat(timestampFrameLayout, View.ALPHA, show ? 1.0f : 0.0f));
         }
