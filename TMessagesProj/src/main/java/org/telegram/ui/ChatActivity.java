@@ -34335,6 +34335,7 @@ public class ChatActivity extends BaseFragment implements
 
         PhotoViewer viewer = PhotoViewer.getInstance();
         viewer.setParentActivity(this, themeDelegate);
+        final ShareAlert[] pendingShareAlert = new ShareAlert[1];
         viewer.openPhotoForSelect(entries, 0, 2, false, new PhotoViewer.EmptyPhotoViewerProvider() {
             private boolean handedOff;
 
@@ -34370,11 +34371,18 @@ public class ChatActivity extends BaseFragment implements
                     return;
                 }
                 handedOff = true;
-                showDialog(shareAlert);
+                pendingShareAlert[0] = shareAlert;
             }
 
             @Override
             public void willHidePhotoViewer() {
+                // Wait until PhotoViewer releases its window before showing the
+                // recipient sheet; showing both dialogs at once can hide the sheet.
+                if (pendingShareAlert[0] != null) {
+                    final ShareAlert shareAlert = pendingShareAlert[0];
+                    pendingShareAlert[0] = null;
+                    AndroidUtilities.runOnUIThread(() -> showDialog(shareAlert), 80);
+                }
                 // The source belongs to Telegram's message cache; never delete it here.
             }
         }, this);
