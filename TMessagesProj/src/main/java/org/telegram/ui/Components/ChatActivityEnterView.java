@@ -238,6 +238,21 @@ public class ChatActivityEnterView extends FrameLayout implements
     FactorAnimator.Target, Theme.Colorable
 {
 
+    /**
+     * UltraTel Beta edit-and-send drafts use the native chat composer, but
+     * route its send action to the recipient selector. Never send to the
+     * currently open source chat as a side effect.
+     */
+    public interface UltraTelTextSendInterceptor {
+        void onChooseRecipients(CharSequence editedText);
+    }
+
+    private UltraTelTextSendInterceptor ultraTelTextSendInterceptor;
+
+    public void setUltraTelTextSendInterceptor(UltraTelTextSendInterceptor interceptor) {
+        ultraTelTextSendInterceptor = BuildVars.isBetaApp() ? interceptor : null;
+    }
+
     private int commonInputType;
     private boolean stickersEnabled;
     private ActionBarMenuSubItem sendWhenOnlineButton;
@@ -7384,6 +7399,15 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     protected boolean sendMessageInternal(boolean notify, int scheduleDate, int scheduleRepeatPeriod, long payStars, boolean allowConfirm) {
+        if (BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null) {
+            // Intercept BEFORE native sending and paid-message confirmation.
+            // A cancelled recipient picker must not send anything or erase the draft.
+            CharSequence draft = messageEditText == null ? null : messageEditText.getTextToUse();
+            if (draft != null && !TextUtils.isEmpty(draft.toString().trim())) {
+                ultraTelTextSendInterceptor.onChooseRecipients(draft);
+            }
+            return true;
+        }
         final boolean allowConfirmFinal = allowConfirm && !animatorEphemeralMessageVisibility.getValue();
 
         final Runnable send = () -> {
