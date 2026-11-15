@@ -185,6 +185,7 @@ public final class UltraTelEditAndSendController {
         // into the wrong topic until topic reply context is handled.
         args.putBoolean("canSelectTopics", false);
         DialogsActivity picker = new DialogsActivity(args);
+        picker.setUltraTelEditAndSendPicker();
         picker.setSharedMedia(entries, initialCaption);
         final boolean[] dispatched = {false};
 
