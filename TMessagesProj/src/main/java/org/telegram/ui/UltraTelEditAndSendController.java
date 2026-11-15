@@ -71,33 +71,33 @@ public final class UltraTelEditAndSendController {
                     || MessageObject.isAnimatedStickerDocument(source.getDocument(), true));
     }
 
+    /**
+     * Turbo Tel ForwardEditing (action 400) flow: compose the caption inside
+     * the original chat, then pick destinations. No PhotoViewer popup and no
+     * local media download are needed for this caption-only edit.
+     */
     public static void open(ChatActivity host, ArrayList<MessageObject> sources) {
         if (!BuildVars.isBetaApp() || host == null || host.getParentActivity() == null
                 || sources == null || sources.isEmpty()) return;
-
         final ArrayList<MessageObject> safeSources = new ArrayList<>(sources);
         for (MessageObject source : safeSources) {
             if (!canOfferSingleMedia(source)) return;
         }
 
-        // Native stickers, including animated TGS/WebM stickers, are sent
-        // directly. They never receive an unnecessary media caption editor.
-        if (safeSources.size() == 1 && (safeSources.get(0).isSticker()
-                || safeSources.get(0).isAnimatedSticker()
-                || safeSources.get(0).isVideoSticker())) {
-            openAnimatedStickerRecipients(host, safeSources.get(0));
-            return;
+        // Stickers and GIFs go immediately to recipients, without requiring
+        // a blank caption or opening the chat keyboard.
+        if (safeSources.size() == 1) {
+            MessageObject source = safeSources.get(0);
+            if (source.isSticker() || source.isAnimatedSticker() || source.isVideoSticker()) {
+                openAnimatedStickerRecipients(host, source);
+                return;
+            }
+            if (source.isGif()) {
+                openRemoteMediaRecipientPicker(host, safeSources, null, null, true);
+                return;
+            }
         }
-
-        // Use the Telegram media editor before choosing destinations.
-        // The source messages remain intact; only a local draft is edited.
-        UltraTelMediaDraft draft = UltraTelMediaDraft.fromMessages(
-                safeSources, host.getCurrentAccount());
-        if (draft != null) {
-            openDraftEditor(host, draft);
-        } else {
-            new PendingMediaDownload(host, safeSources).start();
-        }
+        host.startUltraTelMediaCompose(safeSources);
     }
 
     private static void openDraftEditor(ChatActivity host, UltraTelMediaDraft draft) {
@@ -257,6 +257,12 @@ public final class UltraTelEditAndSendController {
     public static void openRemoteMediaRecipientPicker(ChatActivity host,
             ArrayList<MessageObject> sources, CharSequence caption,
             Runnable onSent) {
+        openRemoteMediaRecipientPicker(host, sources, caption, onSent, false);
+    }
+
+    private static void openRemoteMediaRecipientPicker(ChatActivity host,
+            ArrayList<MessageObject> sources, CharSequence caption,
+            Runnable onSent, boolean skipCaption) {
         if (host == null || host.getParentActivity() == null
                 || sources == null || sources.isEmpty()) return;
 
@@ -286,7 +292,7 @@ public final class UltraTelEditAndSendController {
             }
             return sendRemoteMedia(host, safeSources, captionText,
                     dialogIds, withSound, onSent);
-        });
+        }, skipCaption);
         host.showDialog(picker);
     }
 
