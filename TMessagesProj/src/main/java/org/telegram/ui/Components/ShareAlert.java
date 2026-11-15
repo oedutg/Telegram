@@ -384,10 +384,10 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 || source.messageOwner.noforwards) {
             return null;
         }
-        ShareAlert alert = new ShareAlert(context, (ArrayList<MessageObject>) null,
+        // The caller must show this sheet before opening its draft editor.
+        // Opening an AlertDialog from the factory would race the sheet window.
+        return new ShareAlert(context, (ArrayList<MessageObject>) null,
                 source.messageOwner.message, false, null, false);
-        alert.showUltraTelTextDraftEditor();
-        return alert;
     }
 
     public static ShareAlert createShareAlert(final Context context, MessageObject messageObject, final String text, boolean channel, final String copyLink, boolean fullScreen) {
@@ -2014,10 +2014,12 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 .setNegativeButton("Cancelar", null)
                 .setPositiveButton("Aplicar", (dialog, which) -> {
                     String draft = editor.getText().toString();
-                    if (!draft.trim().isEmpty()) {
-                        sendingText[0] = draft;
-                        sendingText[1] = draft;
+                    if (draft.trim().isEmpty()) {
+                        Toast.makeText(getContext(), "A mensagem não pode ficar vazia.", Toast.LENGTH_SHORT).show();
+                        return;
                     }
+                    sendingText[0] = draft;
+                    sendingText[1] = draft;
                 })
                 .show();
     }
