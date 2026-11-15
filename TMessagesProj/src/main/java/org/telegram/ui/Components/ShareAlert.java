@@ -1284,6 +1284,17 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         });
         gridView.setOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                super.onScrollStateChanged(recyclerView, newState);
+                // Some devices reach the bottom without a positive dy event.
+                // Trigger the next 20 when the user finishes dragging.
+                if (newState == RecyclerView.SCROLL_STATE_IDLE && listAdapter != null
+                        && layoutManager != null && !recyclerView.canScrollVertically(1)) {
+                    listAdapter.loadNextPageIfNeeded(layoutManager.findLastVisibleItemPosition());
+                }
+            }
+
+            @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 if (dy != 0) {
                     updateLayout();
@@ -2091,6 +2102,12 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
         if (ultraTelSelectAllSwitch != null) {
             ultraTelSelectAllSwitch.setVisibility(ultraTelEditedMediaMode ? View.VISIBLE : View.GONE);
+        }
+        if (ultraTelEditedMediaMode) {
+            // A partially populated dialog cache can grow while the picker is
+            // open. Keep the grid in sync instead of freezing its first page.
+            NotificationCenter.getInstance(currentAccount).addWeakObserver(
+                    this, NotificationCenter.dialogsNeedReload);
         }
         if (listAdapter != null) {
             listAdapter.fetchDialogs();
@@ -2914,7 +2931,10 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             if (listAdapter != null) {
                 listAdapter.fetchDialogs();
             }
-            NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.dialogsNeedReload);
+            if (!ultraTelEditedMediaMode && !ultraTelBulkMode && !ultraTelDirectForwardMode) {
+                NotificationCenter.getInstance(currentAccount).removeObserver(
+                        this, NotificationCenter.dialogsNeedReload);
+            }
         }
     }
 
@@ -3182,7 +3202,9 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
 
         public void fetchDialogs() {
-            visibleDialogsCount = ULTRATEL_PAGE_SIZE;
+            // Do not drop back to 20 after a Telegram dialogs refresh. Doing
+            // that mid-scroll made the recipient picker appear stuck.
+            visibleDialogsCount = Math.max(ULTRATEL_PAGE_SIZE, visibleDialogsCount);
             dialogs.clear();
             dialogsMap.clear();
             long selfUserId = UserConfig.getInstance(currentAccount).clientUserId;
