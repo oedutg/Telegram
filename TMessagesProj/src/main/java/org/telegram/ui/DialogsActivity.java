@@ -673,6 +673,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private DialogsActivityDelegate delegate;
 
     private ArrayList<MediaController.PhotoEntry> sharedMediaEntries;
+    private boolean ultraTelEditAndSendPicker;
     private String sharedLink;
     private CharSequence sharedTextSeed;
     private ShareTopView shareTopView;
@@ -3393,7 +3394,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             } else if (isQuote) {
                 actionBar.setTitle(getString(R.string.QuoteTo));
             } else if (initialDialogsType == DIALOGS_TYPE_FORWARD && selectAlertString == null) {
-                actionBar.setTitle(getString(R.string.ForwardTo));
+                actionBar.setTitle(ultraTelEditAndSendPicker ? "Enviar edição para..." : getString(R.string.ForwardTo));
             } else if (initialDialogsType == DIALOGS_TYPE_WIDGET) {
                 actionBar.setTitle(getString(R.string.SelectChats));
             } else if (initialDialogsType == DIALOGS_TYPE_START_ATTACH_BOT) {
@@ -10234,7 +10235,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             animatorForwardButtonVisible.setValue(!selectedDialogs.isEmpty(), true);
             updateShareTopViewRecipients();
             if (selectedDialogs.isEmpty()) {
-                final String title = LocaleController.getString(initialDialogsType == 3 && selectAlertString == null ? R.string.ForwardTo : R.string.SelectChat);
+                final String title = ultraTelEditAndSendPicker ? "Enviar edição para..." : LocaleController.getString(initialDialogsType == 3 && selectAlertString == null ? R.string.ForwardTo : R.string.SelectChat);
                 if (wasSelectedDialogsEmpty == selectedDialogs.isEmpty()) {
                     actionBar.setTitle(title);
                 } else {
@@ -11280,6 +11281,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     public void setDelegate(DialogsActivityDelegate dialogsActivityDelegate) {
         delegate = dialogsActivityDelegate;
+    }
+
+    /** Scope the recipient title to a newly edited UltraTel media draft. */
+    public void setUltraTelEditAndSendPicker() {
+        ultraTelEditAndSendPicker = true;
     }
 
     public void setSharedMedia(ArrayList<MediaController.PhotoEntry> entries, CharSequence initialCaption) {
