@@ -181,6 +181,8 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     protected Map<TLRPC.Dialog, TLRPC.TL_forumTopic> selectedDialogTopics = new HashMap<>();
     private SwitchView switchView;
     private boolean ultraTelBulkMode;
+    private boolean ultraTelBulkConfirmed;
+    private boolean ultraTelBulkDispatching;
     private Switch ultraTelSelectAllSwitch;
     private boolean ultraTelUpdatingSelectAll;
     private int containerViewTop = -1;
@@ -1967,6 +1969,8 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     /** Enable only from an explicit UltraTel Beta bulk-send entry point. */
     public void setUltraTelBulkMode(boolean enabled) {
         ultraTelBulkMode = enabled && BuildVars.isBetaApp();
+        ultraTelBulkConfirmed = false;
+        ultraTelBulkDispatching = false;
         if (ultraTelSelectAllSwitch != null) {
             ultraTelSelectAllSwitch.setVisibility(ultraTelBulkMode ? View.VISIBLE : View.GONE);
         }
@@ -2486,10 +2490,24 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                     return;
                 }
             }
-            // Block unfinished bulk dispatch until confirmation and cooldown
-            // reservation are integrated; normal forwarding is unaffected.
-            Toast.makeText(getContext(), "Envio múltiplo ainda não disponível nesta Beta.", Toast.LENGTH_LONG).show();
-            return;
+            if (ultraTelBulkDispatching) return;
+            long remaining = org.telegram.messenger.UltraTelBulkSendGuard.remainingCooldownMs(getContext(), currentAccount);
+            if (remaining > 0) {
+                long hours = (remaining + 3599999L) / 3600000L;
+                Toast.makeText(getContext(), "Aguarde " + hours + "h para outro envio múltiplo.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            if (!ultraTelBulkConfirmed) {
+                new AlertDialog.Builder(getContext())
+                    .setTitle("Confirmar envio múltiplo")
+                    .setMessage("Enviar para " + selectedDialogs.size() + " conversas privadas? Você poderá iniciar outra campanha após 24 horas. Verifique se os destinatários concordaram em receber a mensagem.")
+                    .setNegativeButton("Cancelar", null)
+                    .setPositiveButton("Enviar", (dialog, which) -> {
+                        ultraTelBulkConfirmed = true;
+                        sendInternal(withSound);
+                    }).show();
+                return;
+            }
         }
         for (int a = 0; a < selectedDialogs.size(); a++) {
             long key = selectedDialogs.keyAt(a);
@@ -2574,6 +2592,15 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
 
         AlertsCreator.ensurePaidMessagesMultiConfirmation(currentAccount, paidDialogIds, messagesCount, prices -> {
+            if (ultraTelBulkMode) {
+                if (ultraTelBulkDispatching || !ultraTelBulkConfirmed
+                        || !org.telegram.messenger.UltraTelBulkSendGuard.tryReserveCampaign(getContext(), currentAccount, selectedDialogs.size())) {
+                    Toast.makeText(getContext(), "Campanha não autorizada ou já utilizada.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                ultraTelBulkDispatching = true;
+                ultraTelBulkConfirmed = false;
+            }
             boolean hadPaid = false;
             if (sendingMessageObjects != null) {
                 List<Long> removeKeys = new ArrayList<>();
