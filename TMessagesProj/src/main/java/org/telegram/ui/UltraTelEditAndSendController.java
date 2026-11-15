@@ -122,7 +122,7 @@ public final class UltraTelEditAndSendController {
         viewer.setParentActivity(host, host.getResourceProvider());
         viewer.hasCaptionForAllMedia = true;
         viewer.captionForAllMedia = initialCaption;
-        viewer.openPhotoForSelect(new ArrayList<Object>(entries), 0, 0, false,
+        boolean opened = viewer.openPhotoForSelect(new ArrayList<Object>(entries), 0, 0, false,
                 new PhotoViewer.EmptyPhotoViewerProvider() {
                     @Override
                     public int getSelectedCount() {
@@ -162,8 +162,11 @@ public final class UltraTelEditAndSendController {
                         CharSequence currentCaption = PhotoViewer.getInstance().getCurrentCaptionText();
                         final CharSequence caption = currentCaption != null
                                 ? currentCaption : editedCaption[0];
-                        for (MediaController.PhotoEntry entry : entries) {
-                            entry.caption = caption;
+                        // PhotoViewer updates each PhotoEntry when a caption is
+                        // applied. Do not overwrite the captions of every album
+                        // item with the currently visible image's caption.
+                        if (!entries.isEmpty() && caption != null) {
+                            entries.get(0).caption = caption;
                         }
                         PhotoViewer.getInstance().closePhoto(true, false);
                         // Open the native recipient selector only after the
@@ -175,7 +178,14 @@ public final class UltraTelEditAndSendController {
                         }, 250);
                     }
                 }, null);
+        if (!opened) {
+            Toast.makeText(host.getParentActivity(),
+                    "Não foi possível abrir o editor nativo de mídia.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
         viewer.setSelectionDisabled(true);
+        viewer.setTitle("Editar e Enviar");
     }
 
     private static void openRecipientPicker(ChatActivity host,
@@ -263,8 +273,9 @@ public final class UltraTelEditAndSendController {
             info.thumbPath = entry.thumbPath;
             info.coverPath = entry.coverPath;
             info.isVideo = entry.isVideo;
-            info.caption = index == 0 && caption != null ? caption.toString() : null;
-            info.entities = index == 0 ? entry.entities : null;
+            CharSequence itemCaption = index == 0 && caption != null ? caption : entry.caption;
+            info.caption = TextUtils.isEmpty(itemCaption) ? null : itemCaption.toString();
+            info.entities = entry.entities;
             info.masks = entry.stickers;
             info.videoEditedInfo = entry.editedInfo;
             info.ttl = entry.ttl;
