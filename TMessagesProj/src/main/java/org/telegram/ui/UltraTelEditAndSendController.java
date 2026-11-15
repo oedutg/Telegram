@@ -7,6 +7,9 @@ import android.widget.Toast;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.DialogObject;
+import org.telegram.messenger.FileLoader;
+import org.telegram.messenger.ImageLocation;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.UltraTelBulkSendGuard;
 import org.telegram.messenger.ChatObject;
@@ -23,6 +26,7 @@ import org.telegram.ui.Components.ShareAlert;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 /**
@@ -69,27 +73,179 @@ public final class UltraTelEditAndSendController {
 
     public static void open(ChatActivity host, ArrayList<MessageObject> sources) {
         if (!BuildVars.isBetaApp() || host == null || host.getParentActivity() == null
-                || sources == null || sources.isEmpty()) {
+                || sources == null || sources.isEmpty()) return;
+
+        final ArrayList<MessageObject> safeSources = new ArrayList<>(sources);
+        for (MessageObject source : safeSources) {
+            if (!canOfferSingleMedia(source)) return;
+        }
+
+        // Native stickers, including animated TGS/WebM stickers, are sent
+        // directly. They never receive an unnecessary media caption editor.
+        if (safeSources.size() == 1 && (safeSources.get(0).isSticker()
+                || safeSources.get(0).isAnimatedSticker()
+                || safeSources.get(0).isVideoSticker())) {
+            openAnimatedStickerRecipients(host, safeSources.get(0));
             return;
         }
 
-        // Animated TGS and WebM stickers do not have editable text or a
-        // PhotoViewer-compatible raster source. Go directly to the same
-        // scrolling recipient grid as Envio múltiplo, without a composer.
-        if (sources.size() == 1 && isAnimatedStickerMedia(sources.get(0))) {
-            MessageObject sticker = sources.get(0);
-            if (!canOfferSingleMedia(sticker)) return;
-            openAnimatedStickerRecipients(host, sticker);
-            return;
+        // Use the Telegram media editor before choosing destinations.
+        // The source messages remain intact; only a local draft is edited.
+        UltraTelMediaDraft draft = UltraTelMediaDraft.fromMessages(
+                safeSources, host.getCurrentAccount());
+        if (draft != null) {
+            openDraftEditor(host, draft);
+        } else {
+            new PendingMediaDownload(host, safeSources).start();
+        }
+    }
+
+    private static void openDraftEditor(ChatActivity host, UltraTelMediaDraft draft) {
+        if (host.getParentActivity() == null || draft == null || draft.getItems().isEmpty()) return;
+        ArrayList<MediaController.PhotoEntry> entries = new ArrayList<>();
+        int index = 0;
+        for (UltraTelMediaDraft.Item item : draft.getItems()) {
+            File localFile = item.file;
+            if (localFile == null || !localFile.isFile()) {
+                Toast.makeText(host.getParentActivity(),
+                        "O arquivo ainda não está disponível para edição.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            // GIFs are MP4-backed animations and use the video editor.
+            boolean video = item.video || item.gif;
+            MediaController.PhotoEntry entry = new MediaController.PhotoEntry(
+                    -1, -1 - index, System.currentTimeMillis() / 1000,
+                    localFile.getAbsolutePath(), 0, video, 0, 0, localFile.length());
+            entry.caption = item.caption;
+            entry.entities = item.source.messageOwner.entities;
+            entry.canDeleteAfter = false;
+            entries.add(entry);
+            index++;
+        }
+        openMediaEditor(host, entries, entries.get(0).caption);
+    }
+
+    /**
+     * PhotoViewer requires an on-device file, not a remote Telegram media
+     * reference. Download missing files into Telegram's cache, then reopen the
+     * editor. Never save the originals to the public photo gallery.
+     */
+    private static final class PendingMediaDownload
+            implements NotificationCenter.NotificationCenterDelegate {
+        private final ChatActivity host;
+        private final ArrayList<MessageObject> sources;
+        private final int account;
+        private final HashSet<String> pending = new HashSet<>();
+        private boolean finished;
+
+        PendingMediaDownload(ChatActivity host, ArrayList<MessageObject> sources) {
+            this.host = host;
+            this.sources = sources;
+            this.account = host.getCurrentAccount();
         }
 
-        // Pro Forward: compose captions directly in the source chat instead
-        // of opening a modal PhotoViewer or requiring local gallery saves.
-        // Telegram can reuse the source photo/document media reference.
-        host.startUltraTelMediaCompose(sources);
-        return;
+        void start() {
+            ArrayList<Runnable> requests = new ArrayList<>();
+            FileLoader loader = FileLoader.getInstance(account);
+            for (MessageObject source : sources) {
+                if (isLocallyAvailable(source, account)) continue;
+                if (source.getDocument() instanceof TLRPC.TL_document) {
+                    TLRPC.Document document = source.getDocument();
+                    String name = FileLoader.getAttachFileName(document);
+                    if (TextUtils.isEmpty(name)) {
+                        fail(); return;
+                    }
+                    pending.add(name);
+                    requests.add(() -> loader.loadFile(
+                            document, source, FileLoader.PRIORITY_HIGH, 0));
+                } else if (source.getPhoto() instanceof TLRPC.TL_photo) {
+                    TLRPC.Photo photo = source.getPhoto();
+                    TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(
+                            photo.sizes, AndroidUtilities.getPhotoSize());
+                    ImageLocation location = ImageLocation.getForPhoto(size, photo);
+                    if (location == null) {
+                        fail(); return;
+                    }
+                    String name = FileLoader.getAttachFileName(size);
+                    if (TextUtils.isEmpty(name)) {
+                        fail(); return;
+                    }
+                    pending.add(name);
+                    requests.add(() -> loader.loadFile(
+                            location, source, "jpg", FileLoader.PRIORITY_HIGH, 0));
+                } else {
+                    fail(); return;
+                }
+            }
+            if (pending.isEmpty()) {
+                showEditorIfReady();
+                return;
+            }
+            NotificationCenter notifications = NotificationCenter.getInstance(account);
+            notifications.addObserver(this, NotificationCenter.fileLoaded);
+            notifications.addObserver(this, NotificationCenter.fileLoadFailed);
+            if (host.getParentActivity() != null) {
+                Toast.makeText(host.getParentActivity(),
+                        "Baixando mídia para edição…", Toast.LENGTH_SHORT).show();
+            }
+            for (Runnable request : requests) request.run();
+        }
 
+        private static boolean isLocallyAvailable(MessageObject source, int account) {
+            if (source.messageOwner.attachPath != null) {
+                File attached = new File(source.messageOwner.attachPath);
+                if (attached.isFile()) return true;
+            }
+            FileLoader loader = FileLoader.getInstance(account);
+            File path = loader.getPathToMessage(source.messageOwner, false, true);
+            if (path != null && path.isFile()) return true;
+            path = loader.getPathToMessage(source.messageOwner, true, true);
+            return path != null && path.isFile();
+        }
 
+        @Override
+        public void didReceivedNotification(int id, int eventAccount, Object... args) {
+            if (finished || eventAccount != account || args.length == 0
+                    || !(args[0] instanceof String) || !pending.contains(args[0])) return;
+            if (id == NotificationCenter.fileLoadFailed) {
+                fail();
+            } else if (id == NotificationCenter.fileLoaded) {
+                pending.remove((String) args[0]);
+                if (pending.isEmpty()) {
+                    cleanup();
+                    showEditorIfReady();
+                }
+            }
+        }
+
+        private void showEditorIfReady() {
+            if (host.getParentActivity() == null) return;
+            UltraTelMediaDraft draft = UltraTelMediaDraft.fromMessages(sources, account);
+            if (draft == null) {
+                Toast.makeText(host.getParentActivity(),
+                        "Não foi possível preparar a mídia para edição.",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            openDraftEditor(host, draft);
+        }
+
+        private void fail() {
+            cleanup();
+            if (host.getParentActivity() != null) {
+                Toast.makeText(host.getParentActivity(),
+                        "Falha ao baixar a mídia original para edição.",
+                        Toast.LENGTH_SHORT).show();
+            }
+        }
+
+        private void cleanup() {
+            if (finished) return;
+            finished = true;
+            NotificationCenter notifications = NotificationCenter.getInstance(account);
+            notifications.removeObserver(this, NotificationCenter.fileLoaded);
+            notifications.removeObserver(this, NotificationCenter.fileLoadFailed);
+        }
     }
 
     /**
