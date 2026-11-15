@@ -51,6 +51,7 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.EditText;
 import android.widget.Switch;
 import android.widget.Toast;
 
@@ -1966,6 +1967,43 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     }
 
     private int shiftDp = 4;
+    /**
+     * Text-only draft editor. It changes the outgoing share payload, never the
+     * source message. Media and album editing require a separate native composer.
+     */
+    public void showUltraTelTextDraftEditor() {
+        if (!BuildVars.isBetaApp() || sendingMessageObjects != null
+                || sendingText[0] == null || getContext() == null) {
+            return;
+        }
+        final EditText editor = new EditText(getContext());
+        editor.setSingleLine(false);
+        editor.setMinLines(3);
+        editor.setMaxLines(12);
+        editor.setText(sendingText[0]);
+        editor.setSelection(editor.length());
+        final android.widget.FrameLayout wrapper = new android.widget.FrameLayout(getContext());
+        int margin = dp(20);
+        android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
+        params.leftMargin = margin;
+        params.rightMargin = margin;
+        wrapper.addView(editor, params);
+        new AlertDialog.Builder(getContext())
+                .setTitle("Editar e Enviar")
+                .setView(wrapper)
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Aplicar", (dialog, which) -> {
+                    String draft = editor.getText().toString();
+                    if (!draft.trim().isEmpty()) {
+                        sendingText[0] = draft;
+                        sendingText[1] = draft;
+                    }
+                })
+                .show();
+    }
+
     /** Enable only from an explicit UltraTel Beta bulk-send entry point. */
     public void setUltraTelBulkMode(boolean enabled) {
         ultraTelBulkMode = enabled && BuildVars.isBetaApp();
