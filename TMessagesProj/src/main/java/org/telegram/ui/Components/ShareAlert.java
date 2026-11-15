@@ -182,6 +182,14 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     protected Map<TLRPC.Dialog, TLRPC.TL_forumTopic> selectedDialogTopics = new HashMap<>();
     private SwitchView switchView;
     private boolean ultraTelBulkMode;
+    private boolean ultraTelEditedMediaMode;
+    private boolean ultraTelEditedMediaDispatching;
+    private UltraTelEditedMediaRecipientCallback ultraTelEditedMediaCallback;
+
+    /** Receives selected private chats from the native share grid. Never forwards original media. */
+    public interface UltraTelEditedMediaRecipientCallback {
+        boolean sendEditedMedia(ArrayList<Long> dialogIds, boolean withSound);
+    }
     private boolean ultraTelBulkConfirmed;
     private boolean ultraTelBulkDispatching;
     private Switch ultraTelSelectAllSwitch;
@@ -2030,13 +2038,31 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         ultraTelBulkConfirmed = false;
         ultraTelBulkDispatching = false;
         if (ultraTelSelectAllSwitch != null) {
-            ultraTelSelectAllSwitch.setVisibility(ultraTelBulkMode ? View.VISIBLE : View.GONE);
+            ultraTelSelectAllSwitch.setVisibility((ultraTelBulkMode || ultraTelEditedMediaMode) ? View.VISIBLE : View.GONE);
         }
         if (listAdapter != null) listAdapter.fetchDialogs();
     }
 
+    /**
+     * Uses the exact same scrollable, paginated grid and select-all switch as
+     * Envio múltiplo, but dispatches freshly edited media instead of forwarding.
+     * The 24-hour campaign cooldown is deliberately not applied here.
+     */
+    public void setUltraTelEditedMediaRecipientCallback(UltraTelEditedMediaRecipientCallback callback) {
+        ultraTelEditedMediaMode = BuildVars.isBetaApp() && callback != null;
+        ultraTelEditedMediaCallback = ultraTelEditedMediaMode ? callback : null;
+        ultraTelEditedMediaDispatching = false;
+        ultraTelBulkMode = false;
+        if (ultraTelSelectAllSwitch != null) {
+            ultraTelSelectAllSwitch.setVisibility(ultraTelEditedMediaMode ? View.VISIBLE : View.GONE);
+        }
+        if (listAdapter != null) {
+            listAdapter.fetchDialogs();
+        }
+    }
+
     private void setUltraTelAllRecipientsSelected(boolean checked) {
-        if (!ultraTelBulkMode || listAdapter == null) return;
+        if ((!ultraTelBulkMode && !ultraTelEditedMediaMode) || listAdapter == null) return;
         if (checked) {
             int eligible = 0;
             for (TLRPC.Dialog dialog : listAdapter.dialogs) {
@@ -2070,9 +2096,9 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     }
 
     private void selectDialog(View cell, TLRPC.Dialog dialog) {
-        if (ultraTelBulkMode && dialog != null) {
+        if ((ultraTelBulkMode || ultraTelEditedMediaMode) && dialog != null) {
             if (!org.telegram.messenger.UltraTelBulkSendGuard.isEligibleRecipient(dialog.id)) {
-                Toast.makeText(getContext(), "O envio múltiplo aceita apenas conversas privadas.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "Selecione apenas conversas privadas.", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (selectedDialogs.indexOfKey(dialog.id) < 0
@@ -2540,6 +2566,27 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     }
 
     protected void sendInternal(boolean withSound) {
+        if (ultraTelEditedMediaMode) {
+            if (ultraTelEditedMediaDispatching || ultraTelEditedMediaCallback == null) return;
+            if (!org.telegram.messenger.UltraTelBulkSendGuard.isWithinRecipientLimit(selectedDialogs.size())) {
+                Toast.makeText(getContext(), "Selecione de 1 a 20 destinatários.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            ArrayList<Long> recipientIds = new ArrayList<>();
+            for (int i = 0; i < selectedDialogs.size(); i++) {
+                long did = selectedDialogs.keyAt(i);
+                if (!org.telegram.messenger.UltraTelBulkSendGuard.isEligibleRecipient(did)) {
+                    Toast.makeText(getContext(), "Seleção contém uma conversa não permitida.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                recipientIds.add(did);
+            }
+            if (ultraTelEditedMediaCallback.sendEditedMedia(recipientIds, withSound)) {
+                ultraTelEditedMediaDispatching = true;
+                dismiss();
+            }
+            return;
+        }
         if (ultraTelBulkMode) {
             if (!org.telegram.messenger.UltraTelBulkSendGuard.isWithinRecipientLimit(selectedDialogs.size())) {
                 Toast.makeText(getContext(), "Selecione de 1 a 20 destinatários.", Toast.LENGTH_SHORT).show();
@@ -3156,7 +3203,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
 
         public void loadNextPageIfNeeded(int lastVisiblePosition) {
-            if (!ultraTelBulkMode || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
+            if ((!ultraTelBulkMode && !ultraTelEditedMediaMode) || visibleDialogsCount >= dialogs.size() || lastVisiblePosition < visibleDialogsCount - 4) {
                 return;
             }
             int oldCount = visibleDialogsCount;
@@ -3166,7 +3213,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
         @Override
         public int getItemCount() {
-            int count = ultraTelBulkMode ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
+            int count = (ultraTelBulkMode || ultraTelEditedMediaMode) ? Math.min(visibleDialogsCount, dialogs.size()) : dialogs.size();
             if (count != 0) {
                 count++;
             }
