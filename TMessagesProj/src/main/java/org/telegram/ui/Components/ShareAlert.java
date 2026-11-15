@@ -188,7 +188,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
     /** Receives selected private chats from the native share grid. Never forwards original media. */
     public interface UltraTelEditedMediaRecipientCallback {
-        boolean sendEditedMedia(ArrayList<Long> dialogIds, boolean withSound);
+        boolean sendEditedMedia(ArrayList<Long> dialogIds, boolean withSound, CharSequence pickerCaption);
     }
     private boolean ultraTelBulkConfirmed;
     private boolean ultraTelBulkDispatching;
@@ -2581,7 +2581,10 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 }
                 recipientIds.add(did);
             }
-            if (ultraTelEditedMediaCallback.sendEditedMedia(recipientIds, withSound)) {
+            // Treat text typed below the recipient grid as the edited media
+            // caption, rather than silently discarding it.
+            CharSequence pickerCaption = commentTextView == null ? null : commentTextView.getText();
+            if (ultraTelEditedMediaCallback.sendEditedMedia(recipientIds, withSound, pickerCaption)) {
                 ultraTelEditedMediaDispatching = true;
                 dismiss();
             }
