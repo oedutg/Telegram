@@ -248,9 +248,26 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     private UltraTelTextSendInterceptor ultraTelTextSendInterceptor;
+    private boolean ultraTelTextSendWatcherInstalled;
+    private final TextWatcher ultraTelTextSendClearWatcher = new TextWatcher() {
+        @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
+        @Override public void onTextChanged(CharSequence text, int start, int before, int count) {
+            // Clearing the composer cancels special edit-and-send mode, so
+            // subsequent normal typing can never be captured accidentally.
+            if (ultraTelTextSendInterceptor != null && TextUtils.isEmpty(text)) {
+                ultraTelTextSendInterceptor = null;
+            }
+        }
+        @Override public void afterTextChanged(Editable text) {}
+    };
 
     public void setUltraTelTextSendInterceptor(UltraTelTextSendInterceptor interceptor) {
         ultraTelTextSendInterceptor = BuildVars.isBetaApp() ? interceptor : null;
+        if (ultraTelTextSendInterceptor != null
+                && messageEditText != null && !ultraTelTextSendWatcherInstalled) {
+            messageEditText.addTextChangedListener(ultraTelTextSendClearWatcher);
+            ultraTelTextSendWatcherInstalled = true;
+        }
     }
 
     private int commonInputType;
