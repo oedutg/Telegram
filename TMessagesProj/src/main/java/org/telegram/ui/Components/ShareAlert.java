@@ -2005,6 +2005,17 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     }
 
     private void selectDialog(View cell, TLRPC.Dialog dialog) {
+        if (ultraTelBulkMode && dialog != null) {
+            if (!org.telegram.messenger.UltraTelBulkSendGuard.isEligibleRecipient(dialog.id)) {
+                Toast.makeText(getContext(), "O envio múltiplo aceita apenas conversas privadas.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (selectedDialogs.indexOfKey(dialog.id) < 0
+                    && selectedDialogs.size() >= org.telegram.messenger.UltraTelBulkSendGuard.MAX_RECIPIENTS) {
+                Toast.makeText(getContext(), "Limite de 20 destinatários por envio.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+        }
         if (dialog instanceof ShareDialogsAdapter.MyStoryDialog) {
             onShareStory(cell);
             return;
@@ -2464,6 +2475,22 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     }
 
     protected void sendInternal(boolean withSound) {
+        if (ultraTelBulkMode) {
+            if (!org.telegram.messenger.UltraTelBulkSendGuard.isWithinRecipientLimit(selectedDialogs.size())) {
+                Toast.makeText(getContext(), "Selecione de 1 a 20 destinatários.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            for (int i = 0; i < selectedDialogs.size(); i++) {
+                if (!org.telegram.messenger.UltraTelBulkSendGuard.isEligibleRecipient(selectedDialogs.keyAt(i))) {
+                    Toast.makeText(getContext(), "Seleção contém uma conversa não permitida.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+            // Block unfinished bulk dispatch until confirmation and cooldown
+            // reservation are integrated; normal forwarding is unaffected.
+            Toast.makeText(getContext(), "Envio múltiplo ainda não disponível nesta Beta.", Toast.LENGTH_LONG).show();
+            return;
+        }
         for (int a = 0; a < selectedDialogs.size(); a++) {
             long key = selectedDialogs.keyAt(a);
             if (AlertsCreator.checkSlowMode(getContext(), currentAccount, key, frameLayout2.getTag() != null && commentTextView.length() > 0)) {
