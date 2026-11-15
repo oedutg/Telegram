@@ -311,7 +311,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         BackupImageView thumbnail = new BackupImageView(getContext());
         thumbnail.setRoundRadius(dp(5));
         TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(source.photoThumbs2, 100);
-        Object imageParent = source.photoThumbsObject2;
+        TLObject imageParent = source.photoThumbsObject2;
         if (size == null) {
             size = FileLoader.getClosestPhotoSizeWithSize(source.photoThumbs, 100);
             imageParent = source.photoThumbsObject;
