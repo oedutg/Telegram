@@ -15,6 +15,8 @@ import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.ShareAlert;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * UltraTel Beta's Editar e Enviar flow, modeled on Turbo Tel's ForwardEditing:
@@ -116,76 +118,133 @@ public final class UltraTelEditAndSendController {
 
         ShareAlert picker = new ShareAlert(host.getParentActivity(),
                 (ArrayList<MessageObject>) null, "", false, null, false);
-        picker.setUltraTelEditedMediaRecipientCallback((dialogIds, withSound, pickerComment) -> {
-            CharSequence captionText = caption == null ? "" : caption;
-            // Retain styled spans from the chat composer. A recipient-panel
-            // comment is appended instead of replacing the original edits.
-            if (!TextUtils.isEmpty(pickerComment)) {
-                captionText = TextUtils.isEmpty(captionText) ? pickerComment
-                        : TextUtils.concat(captionText, "\n", pickerComment);
+        picker.setUltraTelEditedMediaRecipientCallback((dialogIds, topics, withSound,
+                pickerComment, includeText, includeQuote) -> {
+            CharSequence edited = includeText ? (caption == null ? "" : caption) : "";
+            if (includeText && !TextUtils.isEmpty(pickerComment)) {
+                edited = TextUtils.isEmpty(edited) ? pickerComment
+                        : TextUtils.concat(edited, "\n", pickerComment);
             }
-            return sendRemoteMedia(host, safeSources, captionText,
-                    dialogIds, withSound, onSent);
+            return sendRemoteMedia(host, safeSources, edited, dialogIds, topics,
+                    withSound, onSent, includeText, includeQuote);
         }, skipCaption);
         host.showDialog(picker);
     }
 
+    private static boolean isValidDestination(ChatActivity host, long did) {
+        if (did == 0 || did == Long.MAX_VALUE || DialogObject.isEncryptedDialog(did)) return false;
+        if (DialogObject.isUserDialog(did)) return true;
+        if (!DialogObject.isChatDialog(did)) return false;
+        TLRPC.Chat chat = host.getMessagesController().getChat(-did);
+        return chat != null && !org.telegram.messenger.ChatObject.isNotInChat(chat)
+                && (!org.telegram.messenger.ChatObject.isChannel(chat)
+                    || chat.megagroup
+                    || org.telegram.messenger.ChatObject.isCanWriteToChannel(
+                            -did, host.getCurrentAccount()));
+    }
+
     private static boolean sendRemoteMedia(ChatActivity host,
             ArrayList<MessageObject> sources, CharSequence caption,
-            ArrayList<Long> dialogIds, boolean withSound, Runnable onSent) {
-        if (host.getParentActivity() == null || dialogIds == null
-                || !UltraTelBulkSendGuard.isWithinRecipientLimit(dialogIds.size())) {
+            ArrayList<Long> dialogIds, Map<Long, TLRPC.TL_forumTopic> topics,
+            boolean withSound, Runnable onSent, boolean includeText, boolean includeQuote) {
+        if (host.getParentActivity() == null || dialogIds == null || dialogIds.isEmpty()) return false;
+
+        String originalCaption = "";
+        for (MessageObject source : sources) {
+            if (!TextUtils.isEmpty(source.messageOwner.message)) {
+                originalCaption = source.messageOwner.message;
+                break;
+            }
+        }
+        if (includeQuote && includeText && !TextUtils.equals(
+                caption == null ? "" : caption.toString(), originalCaption)) {
+            Toast.makeText(host.getParentActivity(),
+                    "Para manter a citação, mantenha a legenda original ou desmarque Citação.",
+                    Toast.LENGTH_LONG).show();
             return false;
         }
         final ArrayList<Long> paidDialogs = new ArrayList<>();
-        int paidMessageCount = 0;
+        int paidMessages = 0;
         for (Long did : dialogIds) {
-            if (did == null || !UltraTelBulkSendGuard.isEligibleRecipient(did)) {
+            if (did == null || !isValidDestination(host, did)) {
                 Toast.makeText(host.getParentActivity(),
-                        "Selecione apenas conversas privadas.", Toast.LENGTH_SHORT).show();
+                        "Selecione uma conversa na qual você pode enviar mídia.",
+                        Toast.LENGTH_SHORT).show();
                 return false;
             }
             long price = host.getMessagesController().getSendPaidMessagesStars(did);
-            if (price <= 0) {
-                price = DialogObject.getMessagesStarsPrice(
-                        host.getMessagesController().isUserContactBlocked(did));
-            }
+            if (price <= 0) price = DialogObject.getMessagesStarsPrice(
+                    host.getMessagesController().isUserContactBlocked(did));
             if (price > 0) {
                 paidDialogs.add(did);
-                paidMessageCount += sources.size();
+                paidMessages += sources.size();
             }
         }
 
-        final CharSequence editedCaption = caption == null ? "" : caption;
+        final CharSequence outgoingCaption = caption == null ? "" : caption;
         AlertsCreator.ensurePaidMessagesMultiConfirmation(
-                host.getCurrentAccount(), paidDialogs, paidMessageCount, prices -> {
+                host.getCurrentAccount(), paidDialogs, paidMessages, prices -> {
                     for (Long did : dialogIds) {
                         Long stars = prices == null ? null : prices.get(did);
                         long payStars = stars == null ? 0L : stars;
-                        for (int index = 0; index < sources.size(); index++) {
-                            MessageObject src = sources.get(index);
-                            CharSequence itemCaption = index == 0 ? editedCaption :
-                                    (src.messageOwner.message == null ? "" : src.messageOwner.message);
-                            CharSequence[] entityText = { itemCaption };
+                        TLRPC.TL_forumTopic topic = topics == null ? null : topics.get(did);
+                        boolean mono = topic != null && host.getMessagesController().isMonoForum(did);
+                        MessageObject replyTop = topic == null || mono ? null
+                                : new MessageObject(host.getCurrentAccount(),
+                                        topic.topicStartMessage, false, false);
+                        long monoPeer = mono ? DialogObject.getPeerDialogId(topic.from_id) : 0;
+                        if (includeQuote) {
+                            // Native forwarding preserves attribution and native album grouping.
+                            host.getAccountInstance().getSendMessagesHelper().sendMessage(
+                                    new ArrayList<>(sources), did, false, !includeText,
+                                    withSound, 0, replyTop, -1, payStars);
+                            continue;
+                        }
+
+                        long sourceGroup = sources.size() > 1 ? sources.get(0).getGroupId() : 0;
+                        boolean album = sourceGroup != 0;
+                        for (MessageObject src : sources) {
+                            if (src.getGroupId() != sourceGroup || src.isSticker()
+                                    || src.isAnimatedSticker() || src.isGif()) album = false;
+                        }
+                        long groupId = album
+                                ? host.getAccountInstance().getSendMessagesHelper().getNextRandomId() : 0;
+                        for (int i = 0; i < sources.size(); i++) {
+                            MessageObject src = sources.get(i);
+                            CharSequence itemCaption = i == 0 ? outgoingCaption
+                                    : (album || !includeText ? ""
+                                       : (src.messageOwner.message == null ? "" : src.messageOwner.message));
+                            CharSequence[] entityText = {itemCaption};
                             ArrayList<TLRPC.MessageEntity> entities =
                                     MediaDataController.getInstance(host.getCurrentAccount())
                                             .getEntities(entityText, true);
-                            String finalText = entityText[0] == null ? "" : entityText[0].toString();
+                            String text = entityText[0] == null ? "" : entityText[0].toString();
                             SendMessagesHelper.SendMessageParams params;
                             if (src.getPhoto() instanceof TLRPC.TL_photo) {
                                 params = SendMessagesHelper.SendMessageParams.of(
-                                        (TLRPC.TL_photo) src.getPhoto(), null, did,
-                                        null, null, finalText, entities,
-                                        null, null, withSound, 0, 0, 0, src, false);
+                                        (TLRPC.TL_photo) src.getPhoto(), null, did, null,
+                                        replyTop, text, entities, null, null,
+                                        withSound, 0, 0, 0, src, false);
                             } else if (src.getDocument() instanceof TLRPC.TL_document) {
                                 params = SendMessagesHelper.SendMessageParams.of(
-                                        (TLRPC.TL_document) src.getDocument(), null, null,
-                                        did, null, null, finalText, entities,
-                                        null, null, withSound, 0, 0, 0, src, null, false);
+                                        (TLRPC.TL_document) src.getDocument(), null, null, did,
+                                        null, replyTop, text, entities, null, null,
+                                        withSound, 0, 0, 0, src, null, false);
                             } else {
                                 continue;
                             }
+                            if (album) {
+                                if (i > 0 && i % 10 == 0) {
+                                    groupId = host.getAccountInstance().getSendMessagesHelper().getNextRandomId();
+                                }
+                                params.params = new HashMap<>();
+                                params.params.put("groupId", Long.toString(groupId));
+                                if (i == sources.size() - 1 || i % 10 == 9) {
+                                    params.params.put("final", "1");
+                                }
+                            }
                             params.payStars = payStars;
+                            params.monoForumPeer = monoPeer;
                             host.getAccountInstance().getSendMessagesHelper().sendMessage(params);
                         }
                     }
@@ -201,56 +260,56 @@ public final class UltraTelEditAndSendController {
         ShareAlert picker = new ShareAlert(host.getParentActivity(),
                 (ArrayList<MessageObject>) null, "", false, null, false);
         picker.setUltraTelEditedMediaRecipientCallback(
-                (dialogIds, withSound, unusedCaption) ->
-                        sendAnimatedSticker(host, source, dialogIds, withSound),
+                (dialogIds, topics, withSound, unusedCaption, includeText, includeQuote) ->
+                        sendAnimatedSticker(host, source, dialogIds, withSound, includeQuote),
                 true);
         host.showDialog(picker);
     }
 
     private static boolean sendAnimatedSticker(ChatActivity host, MessageObject source,
-            ArrayList<Long> dialogIds, boolean withSound) {
+            ArrayList<Long> dialogIds, boolean withSound, boolean includeQuote) {
         if (host.getParentActivity() == null || source == null
                 || source.messageOwner == null || source.messageOwner.noforwards
                 || !source.canForwardMessage()
                 || !(source.getDocument() instanceof TLRPC.TL_document)
-                || dialogIds == null
-                || !UltraTelBulkSendGuard.isWithinRecipientLimit(dialogIds.size())) {
-            return false;
-        }
+                || dialogIds == null || dialogIds.isEmpty()) return false;
 
         ArrayList<Long> paidDialogs = new ArrayList<>();
         int paidMessages = 0;
         for (Long did : dialogIds) {
-            if (did == null || !UltraTelBulkSendGuard.isEligibleRecipient(did)) {
+            if (did == null || !isValidDestination(host, did)) {
                 Toast.makeText(host.getParentActivity(),
-                        "Selecione apenas conversas privadas.", Toast.LENGTH_SHORT).show();
+                        "Selecione uma conversa na qual você pode enviar mídia.",
+                        Toast.LENGTH_SHORT).show();
                 return false;
             }
             MessagesController controller = host.getMessagesController();
             long price = controller.getSendPaidMessagesStars(did);
-            if (price <= 0) {
-                price = DialogObject.getMessagesStarsPrice(controller.isUserContactBlocked(did));
-            }
+            if (price <= 0) price = DialogObject.getMessagesStarsPrice(
+                    controller.isUserContactBlocked(did));
             if (price > 0) {
                 paidDialogs.add(did);
                 paidMessages++;
             }
         }
-
         final TLRPC.Document stickerDocument = source.getDocument();
         AlertsCreator.ensurePaidMessagesMultiConfirmation(
                 host.getCurrentAccount(), paidDialogs, paidMessages, prices -> {
                     for (Long did : dialogIds) {
-                        Long price = prices == null ? null : prices.get(did);
-                        host.getAccountInstance().getSendMessagesHelper().sendSticker(
-                                stickerDocument, null, did,
-                                null, null, null, null, null,
-                                withSound, 0, 0, false, source, null,
-                                price == null ? 0L : price, 0, null);
+                        Long stars = prices == null ? null : prices.get(did);
+                        long payStars = stars == null ? 0L : stars;
+                        if (includeQuote) {
+                            ArrayList<MessageObject> messages = new ArrayList<>();
+                            messages.add(source);
+                            host.getAccountInstance().getSendMessagesHelper().sendMessage(
+                                    messages, did, false, false, withSound, 0, payStars);
+                        } else {
+                            host.getAccountInstance().getSendMessagesHelper().sendSticker(
+                                    stickerDocument, null, did, null, null, null, null, null,
+                                    withSound, 0, 0, false, source, null, payStars, 0, null);
+                        }
                     }
                 });
         return true;
     }
-
-
 }
