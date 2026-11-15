@@ -372,6 +372,24 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
     }
 
+    /**
+     * Prepares an editable copy of a plain-text message for a new outgoing
+     * send. The original message is never edited or forwarded.
+     * Media, protected messages and service messages are intentionally excluded.
+     */
+    public static ShareAlert createUltraTelEditAndSend(final Context context, MessageObject source) {
+        if (!BuildVars.isBetaApp() || source == null || source.messageOwner == null
+                || source.type != 0 || source.messageOwner.message == null
+                || source.messageOwner.message.trim().isEmpty()
+                || source.messageOwner.noforwards) {
+            return null;
+        }
+        ShareAlert alert = new ShareAlert(context, (ArrayList<MessageObject>) null,
+                source.messageOwner.message, false, null, false);
+        alert.showUltraTelTextDraftEditor();
+        return alert;
+    }
+
     public static ShareAlert createShareAlert(final Context context, MessageObject messageObject, final String text, boolean channel, final String copyLink, boolean fullScreen) {
         ArrayList<MessageObject> arrayList;
         if (messageObject != null) {
