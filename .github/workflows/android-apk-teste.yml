@@ -156,7 +156,7 @@ jobs:
               'version': version,
               'notes': os.environ.get('RELEASE_NOTES') or 'Melhorias e correções',
               'sha256': sha,
-              'apk_url': f'https://github.com/elenilda10/Telegram/releases/download/{tag}/ultratel.apk',
+              'apk_url': f'https://github.com/oedutg/Telegram/releases/download/{tag}/ultratel.apk',
           }
           pathlib.Path('ultratel-update.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
           pathlib.Path('ultratel.apk').write_bytes(apk.read_bytes())
