@@ -84,8 +84,18 @@ public class BuildVars {
 
     private static Boolean betaApp;
     public static boolean isBetaApp() {
+        // UltraTel's beta branch currently builds with APP_PACKAGE=com.ultratel.messenger.
+        // Keep the package unchanged so Firebase and installed-app updates keep working.
+        // Do not cache false before the Android application context is initialized.
+        Context context = ApplicationLoader.applicationContext;
+        if (context == null) {
+            return false;
+        }
         if (betaApp == null) {
-            betaApp = ApplicationLoader.applicationContext != null && ("org.telegram.messenger.beta".equals(ApplicationLoader.applicationContext.getPackageName()) || "com.ultratel.messenger.beta".equals(ApplicationLoader.applicationContext.getPackageName()));
+            String packageName = context.getPackageName();
+            betaApp = "org.telegram.messenger.beta".equals(packageName)
+                    || "com.ultratel.messenger.beta".equals(packageName)
+                    || "com.ultratel.messenger".equals(packageName);
         }
         return betaApp;
     }
