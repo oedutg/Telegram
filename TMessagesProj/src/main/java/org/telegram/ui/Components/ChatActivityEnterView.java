@@ -280,72 +280,97 @@ public class ChatActivityEnterView extends FrameLayout implements
      * file is never saved to the device gallery.
      */
     public void setUltraTelMediaPreview(MessageObject source, int count, Runnable onCancel) {
-        if (!BuildVars.isBetaApp() || textFieldContainer == null ||
-                messageEditTextContainer == null) {
+        if (!BuildVars.isBetaApp() || !(topView instanceof FrameLayout)) {
             return;
         }
+        final FrameLayout topPanel = (FrameLayout) topView;
         if (ultraTelMediaPreview != null) {
-            textFieldContainer.removeView(ultraTelMediaPreview);
+            topPanel.removeView(ultraTelMediaPreview);
             ultraTelMediaPreview = null;
-            FrameLayout.LayoutParams existing = (FrameLayout.LayoutParams) messageEditTextContainer.getLayoutParams();
-            existing.topMargin = ultraTelOldComposerTopMargin;
-            messageEditTextContainer.setLayoutParams(existing);
+            hideTopView(true);
             setForceShowSendButton(ultraTelOldForceShowSendButton, false);
         }
         if (source == null) {
             return;
         }
 
-        FrameLayout.LayoutParams inputParams = (FrameLayout.LayoutParams) messageEditTextContainer.getLayoutParams();
-        ultraTelOldComposerTopMargin = inputParams.topMargin;
-        inputParams.topMargin += dp(72);
-        messageEditTextContainer.setLayoutParams(inputParams);
-
+        // Use Telegram's existing 48dp composer-top panel instead of placing
+        // a floating view inside the input field. The latter could disappear
+        // behind the chat composer at some screen sizes.
         FrameLayout preview = new FrameLayout(getContext());
-        preview.setBackground(Theme.createRoundRectDrawable(dp(12),
+        preview.setBackground(Theme.createRoundRectDrawable(dp(8),
                 getThemedColor(Theme.key_chat_messagePanelBackground)));
 
+        ImageView forwardIcon = new ImageView(getContext());
+        forwardIcon.setScaleType(ImageView.ScaleType.CENTER);
+        forwardIcon.setImageResource(R.drawable.msg_forward);
+        forwardIcon.setColorFilter(getThemedColor(Theme.key_chat_replyPanelIcons));
+        preview.addView(forwardIcon, LayoutHelper.createFrame(
+                40, 44, Gravity.LEFT | Gravity.CENTER_VERTICAL, 0, 0, 0, 0));
+
         BackupImageView thumbnail = new BackupImageView(getContext());
-        thumbnail.setRoundRadius(dp(7));
-        TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(source.photoThumbs, 100);
-        if (size != null) {
-            thumbnail.setImage(ImageLocation.getForObject(size, source.photoThumbsObject),
-                    "64_64", null, null, null, 0, 1, source);
+        thumbnail.setRoundRadius(dp(5));
+        TLRPC.PhotoSize size = FileLoader.getClosestPhotoSizeWithSize(source.photoThumbs2, 100);
+        Object imageParent = source.photoThumbsObject2;
+        if (size == null) {
+            size = FileLoader.getClosestPhotoSizeWithSize(source.photoThumbs, 100);
+            imageParent = source.photoThumbsObject;
         }
-        preview.addView(thumbnail, LayoutHelper.createFrame(55, 55,
-                Gravity.LEFT | Gravity.CENTER_VERTICAL, 8, 0, 0, 0));
+        if (size != null) {
+            thumbnail.setImage(ImageLocation.getForObject(size, imageParent),
+                    "48_48", null, null, null, 0, 1, source);
+        }
+        preview.addView(thumbnail, LayoutHelper.createFrame(
+                40, 40, Gravity.LEFT | Gravity.CENTER_VERTICAL, 42, 0, 0, 0));
+
+        LinearLayout labels = new LinearLayout(getContext());
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(getContext());
+        title.setText("Editar e enviar");
+        title.setTextColor(getThemedColor(Theme.key_chat_replyPanelName));
+        title.setTypeface(AndroidUtilities.bold());
+        title.setTextSize(14);
+        title.setSingleLine(true);
+        labels.addView(title, new LinearLayout.LayoutParams(
+                LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         TextView description = new TextView(getContext());
-        description.setTextColor(getThemedColor(Theme.key_chat_messagePanelText));
-        description.setTextSize(14);
-        description.setMaxLines(2);
-        description.setEllipsize(TextUtils.TruncateAt.END);
         String type = source.isVideo() ? "Vídeo" : source.isGif() ? "GIF" : "Foto";
-        description.setText(count > 1 ? "Editar e Enviar • " + count + " mídias"
-                : "Editar e Enviar • " + type);
-        description.setGravity(Gravity.CENTER_VERTICAL);
-        preview.addView(description, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 58,
-                Gravity.CENTER_VERTICAL, 73, 0, 45, 0));
+        description.setText(count > 1 ? count + " mídias" : type);
+        description.setTextColor(getThemedColor(Theme.key_chat_messagePanelText));
+        description.setAlpha(0.72f);
+        description.setTextSize(13);
+        description.setSingleLine(true);
+        labels.addView(description, new LinearLayout.LayoutParams(
+                LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+
+        preview.addView(labels, LayoutHelper.createFrame(
+                LayoutHelper.MATCH_PARENT, 45, Gravity.LEFT | Gravity.CENTER_VERTICAL,
+                93, 0, 46, 0));
 
         TextView cancel = new TextView(getContext());
         cancel.setText("×");
-        cancel.setTextSize(25);
+        cancel.setTextSize(27);
         cancel.setGravity(Gravity.CENTER);
-        cancel.setContentDescription("Cancelar Editar e Enviar");
+        cancel.setContentDescription("Cancelar Editar e enviar");
         cancel.setTextColor(getThemedColor(Theme.key_chat_messagePanelText));
         cancel.setOnClickListener(v -> {
-            if (onCancel != null) onCancel.run();
+            if (onCancel != null) {
+                onCancel.run();
+            }
         });
-        preview.addView(cancel, LayoutHelper.createFrame(42, 58,
-                Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 4, 0));
+        preview.addView(cancel, LayoutHelper.createFrame(
+                42, 46, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 3, 0));
 
         ultraTelMediaPreview = preview;
-        textFieldContainer.addView(preview, LayoutHelper.createFrame(
-                LayoutHelper.MATCH_PARENT, 64, Gravity.TOP | Gravity.LEFT,
-                9, 3, DEFAULT_HEIGHT + 10, 0));
         ultraTelOldForceShowSendButton = forceShowSendButton;
+        topPanel.addView(preview, LayoutHelper.createFrame(
+                LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        preview.bringToFront();
         setForceShowSendButton(true, false);
-        textFieldContainer.requestLayout();
+        showTopView(true, true);
     }
 
     private int commonInputType;
