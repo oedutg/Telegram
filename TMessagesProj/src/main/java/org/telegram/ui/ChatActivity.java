@@ -1247,6 +1247,8 @@ public class ChatActivity extends BaseFragment implements
     public final static int OPTION_FORWARD = 2;
     private static final int OPTION_ULTRATEL_BULK = 100501;
     private static final int OPTION_ULTRATEL_EDIT_AND_SEND = 100502;
+    private static final int OPTION_ULTRATEL_DIRECT_FORWARD = 100503;
+    private boolean ultraTelMediaComposerActive;
     public final static int OPTION_COPY = 3;
     public final static int OPTION_SAVE_TO_GALLERY = 4;
     public final static int OPTION_APPLY_LOCALIZATION_OR_THEME = 5;
@@ -34289,6 +34291,56 @@ public class ChatActivity extends BaseFragment implements
         MediaController.saveFile(path, getParentActivity(), messageObject.isVideo() ? 1 : 0, null, null);
     }
 
+    /**
+     * Pro Forward keeps the media as a thumbnail above the native chat
+     * composer and lets the user edit its caption before choosing recipients.
+     * Never changes the source message, never auto-sends to this chat.
+     */
+    public void startUltraTelMediaCompose(ArrayList<MessageObject> sources) {
+        if (!BuildVars.isBetaApp() || sources == null || sources.isEmpty()
+                || getParentActivity() == null || chatActivityEnterView == null) {
+            return;
+        }
+        if (ultraTelMediaComposerActive || !TextUtils.isEmpty(chatActivityEnterView.getFieldText())) {
+            android.widget.Toast.makeText(getParentActivity(),
+                    "Conclua ou cancele o rascunho atual antes de Editar e Enviar.",
+                    android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        final ArrayList<MessageObject> savedMedia = new ArrayList<>(sources);
+        for (MessageObject item : savedMedia) {
+            if (item == null || item.messageOwner == null
+                    || !UltraTelEditAndSendController.canOffer(item, null)) {
+                return;
+            }
+        }
+        ultraTelMediaComposerActive = true;
+        final Runnable clearDraft = () -> {
+            if (!ultraTelMediaComposerActive || chatActivityEnterView == null) return;
+            ultraTelMediaComposerActive = false;
+            chatActivityEnterView.setUltraTelTextSendInterceptor(null);
+            chatActivityEnterView.setUltraTelMediaPreview(null, 0, null);
+            chatActivityEnterView.setFieldText("");
+        };
+
+        MessageObject first = savedMedia.get(0);
+        chatActivityEnterView.setUltraTelMediaPreview(first, savedMedia.size(), clearDraft);
+        chatActivityEnterView.setFieldText(first.messageOwner.message == null
+                ? "" : first.messageOwner.message);
+        chatActivityEnterView.setUltraTelTextSendInterceptor(edited -> {
+            if (!ultraTelMediaComposerActive || getParentActivity() == null) return;
+            UltraTelEditAndSendController.openRemoteMediaRecipientPicker(
+                    ChatActivity.this, savedMedia, edited, clearDraft);
+        });
+        chatActivityEnterView.setFieldFocused();
+        AndroidUtilities.runOnUIThread(() -> {
+            if (ultraTelMediaComposerActive && chatActivityEnterView != null
+                    && getParentActivity() != null) {
+                chatActivityEnterView.openKeyboard();
+            }
+        }, 150);
+    }
+
     private void processSelectedOption(int option) {
         if (selectedObject == null || getParentActivity() == null) {
             return;
@@ -34357,6 +34409,25 @@ public class ChatActivity extends BaseFragment implements
                         chatActivityEnterView.openKeyboard();
                     }
                 }, 150);
+                break;
+            }
+            case OPTION_ULTRATEL_DIRECT_FORWARD: {
+                if (!BuildVars.isBetaApp() || selectedObject == null
+                        || !selectedObject.canForwardMessage() || isPeerNoForwards()) {
+                    break;
+                }
+                ArrayList<MessageObject> originals = new ArrayList<>();
+                if (selectedObjectGroup != null && selectedObjectGroup.messages != null
+                        && !selectedObjectGroup.messages.isEmpty()) {
+                    originals.addAll(selectedObjectGroup.messages);
+                } else {
+                    originals.add(selectedObject);
+                }
+                // Native forward pipeline, so Telegram keeps forwarded attribution.
+                ShareAlert forwardPicker = new ShareAlert(getContext(), ChatActivity.this,
+                        originals, null, null, ChatObject.isChannel(currentChat),
+                        null, null, false, false, false, null, themeDelegate);
+                showDialog(forwardPicker);
                 break;
             }
             case OPTION_ULTRATEL_BULK: {
@@ -46699,6 +46770,9 @@ public class ChatActivity extends BaseFragment implements
                     icons.add(R.drawable.msg_edit);
                 }
                 if (BuildVars.isBetaApp() && !noforwards && !isPeerNoForwards() && selectedObject != null && selectedObject.canForwardMessage()) {
+                    items.add("Encaminhamento Direto");
+                    options.add(OPTION_ULTRATEL_DIRECT_FORWARD);
+                    icons.add(R.drawable.msg_forward);
                     items.add("Envio múltiplo");
                     options.add(OPTION_ULTRATEL_BULK);
                     icons.add(R.drawable.msg_forward);
@@ -47072,6 +47146,9 @@ public class ChatActivity extends BaseFragment implements
                 }
                 if (BuildVars.isBetaApp() && canForward && selectedObject != null
                         && selectedObject.canForwardMessage() && !isPeerNoForwards()) {
+                    items.add("Encaminhamento Direto");
+                    options.add(OPTION_ULTRATEL_DIRECT_FORWARD);
+                    icons.add(R.drawable.msg_forward);
                     items.add("Envio múltiplo");
                     options.add(OPTION_ULTRATEL_BULK);
                     icons.add(R.drawable.msg_forward);
