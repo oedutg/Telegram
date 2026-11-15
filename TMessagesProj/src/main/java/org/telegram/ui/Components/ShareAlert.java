@@ -1183,7 +1183,10 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         gridView.setItemSelectorColorProvider(i -> 0);
         gridView.setPadding(0, 0, 0, dp(48));
         gridView.setClipToPadding(false);
-        gridView.setLayoutManager(layoutManager = new GridLayoutManager(getContext(), 4));
+        final int ultratelGridColumns = BuildVars.isBetaApp()
+                ? Math.max(4, getContext().getResources().getDisplayMetrics().widthPixels / dp(90))
+                : 4;
+        gridView.setLayoutManager(layoutManager = new GridLayoutManager(getContext(), ultratelGridColumns));
 
         iBlur3Capture = (canvas, position) -> Blur3Utils.captureRelativeParent(gridView, canvas, position, gridView, containerView);
 
@@ -1205,8 +1208,9 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 RecyclerListView.Holder holder = (RecyclerListView.Holder) parent.getChildViewHolder(view);
                 if (holder != null) {
                     int pos = holder.getAdapterPosition();
-                    outRect.left = pos % 4 == 0 ? 0 : dp(4);
-                    outRect.right = pos % 4 == 3 ? 0 : dp(4);
+                    int columns = layoutManager.getSpanCount();
+                    outRect.left = pos % columns == 0 ? 0 : dp(4);
+                    outRect.right = pos % columns == columns - 1 ? 0 : dp(4);
                 } else {
                     outRect.left = dp(4);
                     outRect.right = dp(4);
