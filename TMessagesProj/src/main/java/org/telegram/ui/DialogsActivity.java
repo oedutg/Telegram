@@ -11340,6 +11340,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         return sharedMediaEntries;
     }
 
+    /** Only used by UltraTel Beta to honor the native 'Send as file' selection. */
+    public boolean isUltraTelSendAsDocument() {
+        return forceDocument;
+    }
+
     public CharSequence getSharedMediaCaption() {
         return commentView != null ? commentView.getFieldText() : null;
     }
