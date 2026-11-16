@@ -17,6 +17,7 @@ import org.telegram.ui.Components.ShareAlert;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * UltraTel Beta's Editar e Enviar flow, modeled on Turbo Tel's ForwardEditing:
@@ -27,6 +28,24 @@ import java.util.Map;
  * separate PhotoViewer modal, or duplicate local download.
  */
 public final class UltraTelEditAndSendController {
+    // Each new Editar e Enviar operation invalidates pickers from older drafts.
+    private static final Map<ChatActivity, Long> pickerSessions = new WeakHashMap<>();
+
+    private static synchronized long nextPickerSession(ChatActivity host) {
+        long next = pickerSessions.getOrDefault(host, 0L) + 1;
+        pickerSessions.put(host, next);
+        return next;
+    }
+
+    private static synchronized boolean isCurrentPickerSession(ChatActivity host, long session) {
+        return host != null && host.getParentActivity() != null
+                && pickerSessions.getOrDefault(host, 0L) == session;
+    }
+
+    private static synchronized long currentPickerSession(ChatActivity host) {
+        return pickerSessions.getOrDefault(host, 0L);
+    }
+
     private UltraTelEditAndSendController() {
     }
 
@@ -74,6 +93,7 @@ public final class UltraTelEditAndSendController {
     public static void open(ChatActivity host, ArrayList<MessageObject> sources) {
         if (!BuildVars.isBetaApp() || host == null || host.getParentActivity() == null
                 || sources == null || sources.isEmpty()) return;
+        nextPickerSession(host);
         final ArrayList<MessageObject> safeSources = new ArrayList<>(sources);
         for (MessageObject source : safeSources) {
             if (!canOfferSingleMedia(source) && !isEditableTextMessage(source)) return;
@@ -127,17 +147,21 @@ public final class UltraTelEditAndSendController {
             }
         }
 
+        final long pickerSession = currentPickerSession(host);
+        final long pickerSession = currentPickerSession(host);
         ShareAlert picker = new ShareAlert(host.getParentActivity(),
                 (ArrayList<MessageObject>) null, "", false, null, false);
         picker.setUltraTelEditedMediaRecipientCallback((dialogIds, topics, withSound,
                 pickerComment, includeText, includeQuote) -> {
+            if (!isCurrentPickerSession(host, pickerSession)) return false;
+            if (!isCurrentPickerSession(host, pickerSession)) return false;
             CharSequence edited = includeText ? (caption == null ? "" : caption) : "";
             if (includeText && !TextUtils.isEmpty(pickerComment)) {
                 edited = TextUtils.isEmpty(edited) ? pickerComment
                         : TextUtils.concat(edited, "\n", pickerComment);
             }
             return sendRemoteMedia(host, safeSources, edited, dialogIds, topics,
-                    withSound, onSent, includeText, includeQuote);
+                    withSound, onSent, includeText, includeQuote, pickerSession);
         }, skipCaption);
         host.showDialog(picker);
     }
@@ -168,7 +192,7 @@ public final class UltraTelEditAndSendController {
                 return false;
             }
             return sendEditedText(host, source, outgoing, dialogIds, topics,
-                    withSound, includeText, includeQuote, onSent);
+                    withSound, includeText, includeQuote, onSent, pickerSession);
         });
         host.showDialog(picker);
     }
@@ -176,7 +200,8 @@ public final class UltraTelEditAndSendController {
     private static boolean sendEditedText(ChatActivity host, MessageObject source,
             CharSequence outgoingText, ArrayList<Long> dialogIds,
             Map<Long, TLRPC.TL_forumTopic> topics, boolean withSound,
-            boolean includeText, boolean includeQuote, Runnable onSent) {
+            boolean includeText, boolean includeQuote, Runnable onSent, long pickerSession) {
+        if (!isCurrentPickerSession(host, pickerSession)) return false;
         if (host.getParentActivity() == null || dialogIds == null || dialogIds.isEmpty()) {
             return false;
         }
@@ -204,6 +229,7 @@ public final class UltraTelEditAndSendController {
         }
         AlertsCreator.ensurePaidMessagesMultiConfirmation(host.getCurrentAccount(),
                 paidDialogs, paidDialogs.size(), prices -> {
+                    if (!isCurrentPickerSession(host, pickerSession)) return;
                     for (Long did : dialogIds) {
                         Long stars = prices == null ? null : prices.get(did);
                         long payStars = stars == null ? 0 : stars;
@@ -255,7 +281,9 @@ public final class UltraTelEditAndSendController {
     private static boolean sendRemoteMedia(ChatActivity host,
             ArrayList<MessageObject> sources, CharSequence caption,
             ArrayList<Long> dialogIds, Map<Long, TLRPC.TL_forumTopic> topics,
-            boolean withSound, Runnable onSent, boolean includeText, boolean includeQuote) {
+            boolean withSound, Runnable onSent, boolean includeText, boolean includeQuote,
+            long pickerSession) {
+        if (!isCurrentPickerSession(host, pickerSession)) return false;
         if (host.getParentActivity() == null || dialogIds == null || dialogIds.isEmpty()) return false;
 
         String originalCaption = "";
@@ -293,6 +321,7 @@ public final class UltraTelEditAndSendController {
         final CharSequence outgoingCaption = caption == null ? "" : caption;
         AlertsCreator.ensurePaidMessagesMultiConfirmation(
                 host.getCurrentAccount(), paidDialogs, paidMessages, prices -> {
+                    if (!isCurrentPickerSession(host, pickerSession)) return;
                     for (Long did : dialogIds) {
                         Long stars = prices == null ? null : prices.get(did);
                         long payStars = stars == null ? 0L : stars;
@@ -366,17 +395,21 @@ public final class UltraTelEditAndSendController {
         if (host.getParentActivity() == null || !(source.getDocument() instanceof TLRPC.TL_document)) {
             return;
         }
+        final long pickerSession = currentPickerSession(host);
         ShareAlert picker = new ShareAlert(host.getParentActivity(),
                 (ArrayList<MessageObject>) null, "", false, null, false);
         picker.setUltraTelEditedMediaRecipientCallback(
                 (dialogIds, topics, withSound, unusedCaption, includeText, includeQuote) ->
-                        sendAnimatedSticker(host, source, dialogIds, withSound, includeQuote),
+                        isCurrentPickerSession(host, pickerSession) &&
+                        sendAnimatedSticker(host, source, dialogIds, withSound, includeQuote, pickerSession),
                 true);
         host.showDialog(picker);
     }
 
     private static boolean sendAnimatedSticker(ChatActivity host, MessageObject source,
-            ArrayList<Long> dialogIds, boolean withSound, boolean includeQuote) {
+            ArrayList<Long> dialogIds, boolean withSound, boolean includeQuote,
+            long pickerSession) {
+        if (!isCurrentPickerSession(host, pickerSession)) return false;
         if (host.getParentActivity() == null || source == null
                 || source.messageOwner == null || source.messageOwner.noforwards
                 || !source.canForwardMessage()
@@ -404,6 +437,7 @@ public final class UltraTelEditAndSendController {
         final TLRPC.Document stickerDocument = source.getDocument();
         AlertsCreator.ensurePaidMessagesMultiConfirmation(
                 host.getCurrentAccount(), paidDialogs, paidMessages, prices -> {
+                    if (!isCurrentPickerSession(host, pickerSession)) return;
                     for (Long did : dialogIds) {
                         Long stars = prices == null ? null : prices.get(did);
                         long payStars = stars == null ? 0L : stars;
