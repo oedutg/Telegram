@@ -253,6 +253,9 @@ public class ChatActivityEnterView extends FrameLayout implements
     private int ultraTelPreviousEditorMaxLines = -1;
     private boolean ultraTelPreviousTopViewShown;
     private boolean ultraTelOldForceShowSendButton;
+    private int ultraTelPreviousAttachVisibility = -1;
+    private int ultraTelPreviousAudioVideoVisibility = -1;
+    private int ultraTelPreviousCancelBotVisibility = -1;
     private int ultraTelOldComposerTopMargin;
     private boolean ultraTelTextSendWatcherInstalled;
     private final TextWatcher ultraTelTextSendClearWatcher = new TextWatcher() {
@@ -323,6 +326,20 @@ public class ChatActivityEnterView extends FrameLayout implements
             if (!ultraTelPreviousTopViewShown) {
                 hideTopView(false);
             }
+            // Restore only controls owned by this local draft. Never force a
+            // send button into a source chat that cannot send messages.
+            if (attachLayout != null && ultraTelPreviousAttachVisibility != -1) {
+                attachLayout.setVisibility(ultraTelPreviousAttachVisibility);
+            }
+            if (audioVideoButtonContainer != null && ultraTelPreviousAudioVideoVisibility != -1) {
+                audioVideoButtonContainer.setVisibility(ultraTelPreviousAudioVideoVisibility);
+            }
+            if (cancelBotButton != null && ultraTelPreviousCancelBotVisibility != -1) {
+                cancelBotButton.setVisibility(ultraTelPreviousCancelBotVisibility);
+            }
+            ultraTelPreviousAttachVisibility = -1;
+            ultraTelPreviousAudioVideoVisibility = -1;
+            ultraTelPreviousCancelBotVisibility = -1;
             setForceShowSendButton(ultraTelOldForceShowSendButton, false);
         }
         if (source == null) {
@@ -407,6 +424,16 @@ public class ChatActivityEnterView extends FrameLayout implements
 
         ultraTelMediaPreview = preview;
         ultraTelOldForceShowSendButton = forceShowSendButton;
+        // Match Turbo Tel's editing mode: keep the native send control,
+        // but suppress attachment/recording actions while choosing a caption.
+        ultraTelPreviousAttachVisibility = attachLayout == null ? -1 : attachLayout.getVisibility();
+        ultraTelPreviousAudioVideoVisibility = audioVideoButtonContainer == null
+                ? -1 : audioVideoButtonContainer.getVisibility();
+        ultraTelPreviousCancelBotVisibility = cancelBotButton == null
+                ? -1 : cancelBotButton.getVisibility();
+        if (attachLayout != null) attachLayout.setVisibility(View.GONE);
+        if (audioVideoButtonContainer != null) audioVideoButtonContainer.setVisibility(View.GONE);
+        if (cancelBotButton != null) cancelBotButton.setVisibility(View.GONE);
         topPanel.addView(preview, LayoutHelper.createFrame(
                 LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         preview.bringToFront();
