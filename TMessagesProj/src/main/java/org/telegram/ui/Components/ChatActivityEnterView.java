@@ -7017,7 +7017,10 @@ public class ChatActivityEnterView extends FrameLayout implements
     @Override
     public void setVisibility(int visibility) {
         super.setVisibility(visibility);
-        messageEditTextEnabled = visibility == VISIBLE;
+        // Read-only source chats may hide their native input island. Keep the
+        // isolated UltraTel editor interactive until its own session ends.
+        messageEditTextEnabled = visibility == VISIBLE
+                || (BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null);
         if (messageEditText != null) {
             messageEditText.setEnabled(messageEditTextEnabled);
         }
@@ -8294,7 +8297,8 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void checkSendButton(boolean animated) {
-        if (editingMessageObject != null || recordingAudioVideo) {
+        if ((editingMessageObject != null || recordingAudioVideo)
+                && !(BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null)) {
             return;
         }
         if (isPaused) {
@@ -10933,6 +10937,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             delegate.onTextChanged(messageEditText.getText(), true, fromDraft);
         }
         if (BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null) {
+            updateFieldHint(false);
             checkSendButton(false);
         }
     }
@@ -15342,7 +15347,8 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (attachLayout != null) {
             attachLayout.setTranslationX(attachLayoutPaddingTranslationX + attachLayoutTranslationX);
             attachLayout.setAlpha(attachLayoutAlpha * attachLayoutPaddingAlpha);
-            attachLayout.setVisibility(attachLayout.getAlpha() > 0 ? View.VISIBLE : View.GONE);
+            attachLayout.setVisibility(BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null
+                    ? View.GONE : (attachLayout.getAlpha() > 0 ? View.VISIBLE : View.GONE));
             if (attachButton != null && isStories) {
                 attachButton.setAlpha(attachButtonAlpha * attachLayoutPaddingAlpha);
             }
