@@ -285,8 +285,8 @@ public class ChatActivityEnterView extends FrameLayout implements
     public void setUltraTelTextSendInterceptor(UltraTelTextSendInterceptor interceptor) {
         boolean wasEditingLocally = ultraTelTextSendInterceptor != null;
         ultraTelTextSendInterceptor = BuildVars.isBetaApp() ? interceptor : null;
-        // Turbo Tel limits the inline composer to four lines while forwarding
-        // with edits. Restore the original limit when this local draft ends.
+        // Preserve Telegram's native six-line composer while forwarding.
+        // Restore the original limit when this local draft ends.
         if (messageEditText != null) {
             if (ultraTelTextSendInterceptor != null && !wasEditingLocally) {
                 ultraTelPreviousEditorMaxLines = messageEditText.getMaxLines();
@@ -297,11 +297,11 @@ public class ChatActivityEnterView extends FrameLayout implements
                 ultraTelPreviousClickable = messageEditText.isClickable();
                 ultraTelPreviousFocused = messageEditText.hasFocus();
                 ultraTelPreviousEnabled = messageEditText.isEnabled();
-                messageEditText.setMaxLines(4);
+                messageEditText.setMaxLines(6);
                 // Keep the native caption editor compact even for very long messages.
                 // The EditText scrolls internally instead of expanding the chat panel.
                 messageEditText.setMaxHeight(
-                        messageEditText.getLineHeight() * 4
+                        messageEditText.getLineHeight() * 6
                                 + messageEditText.getPaddingTop() + messageEditText.getPaddingBottom());
                 messageEditText.setVerticalScrollBarEnabled(true);
             } else if (ultraTelTextSendInterceptor == null && wasEditingLocally
@@ -8301,6 +8301,38 @@ public class ChatActivityEnterView extends FrameLayout implements
             animated = false;
         }
         updateSendButtonPaid();
+        if (BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null) {
+            // The source chat can be read-only, and its native send button may
+            // already be INVISIBLE with alpha/scale near zero. Do not depend on
+            // the audio/video controls being visible to enter the send state.
+            if (runningAnimation != null) {
+                runningAnimation.cancel();
+                runningAnimation = null;
+            }
+            if (runningAnimation2 != null) {
+                runningAnimation2.cancel();
+                runningAnimation2 = null;
+            }
+            runningAnimationType = 0;
+            if (audioVideoButtonContainer != null) audioVideoButtonContainer.setVisibility(GONE);
+            if (cancelBotButton != null) cancelBotButton.setVisibility(GONE);
+            if (attachLayout != null) attachLayout.setVisibility(GONE);
+            if (expandStickersButton != null) expandStickersButton.setVisibility(GONE);
+            if (slowModeButton != null) setSlowModeButtonVisible(false);
+            SendButton localSendButton = getSendButtonInternal();
+            if (localSendButton != null) {
+                localSendButton.setVisibility(VISIBLE);
+                localSendButton.setAlpha(1.0f);
+                localSendButton.setScaleX(1.0f);
+                localSendButton.setScaleY(1.0f);
+            }
+            if (sendButtonContainer != null) {
+                sendButtonContainer.setVisibility(VISIBLE);
+                sendButtonContainer.setAlpha(1.0f);
+            }
+            updateFieldRight(0);
+            return;
+        }
         final CharSequence message = messageEditText == null ? "" : AndroidUtilities.getTrimmedString(messageEditText.getTextToUse());
         boolean shownSendButton = false;
         if (slowModeTimer > 0 && slowModeTimer != Integer.MAX_VALUE && !isSlowModeIgnored()
