@@ -250,6 +250,7 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     private UltraTelTextSendInterceptor ultraTelTextSendInterceptor;
     private FrameLayout ultraTelMediaPreview;
+    private int ultraTelPreviousEditorMaxLines = -1;
     private boolean ultraTelOldForceShowSendButton;
     private int ultraTelOldComposerTopMargin;
     private boolean ultraTelTextSendWatcherInstalled;
@@ -273,7 +274,20 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     public void setUltraTelTextSendInterceptor(UltraTelTextSendInterceptor interceptor) {
+        boolean wasEditingLocally = ultraTelTextSendInterceptor != null;
         ultraTelTextSendInterceptor = BuildVars.isBetaApp() ? interceptor : null;
+        // Turbo Tel limits the inline composer to four lines while forwarding
+        // with edits. Restore the original limit when this local draft ends.
+        if (messageEditText != null) {
+            if (ultraTelTextSendInterceptor != null && !wasEditingLocally) {
+                ultraTelPreviousEditorMaxLines = messageEditText.getMaxLines();
+                messageEditText.setMaxLines(4);
+            } else if (ultraTelTextSendInterceptor == null && wasEditingLocally
+                    && ultraTelPreviousEditorMaxLines > 0) {
+                messageEditText.setMaxLines(ultraTelPreviousEditorMaxLines);
+                ultraTelPreviousEditorMaxLines = -1;
+            }
+        }
         // Refresh field permissions when the isolated media editor starts or ends.
         if (messageEditText != null) {
             updateFieldHint(false);
