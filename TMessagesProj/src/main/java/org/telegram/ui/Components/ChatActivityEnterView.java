@@ -13558,6 +13558,28 @@ public class ChatActivityEnterView extends FrameLayout implements
         }
     }
 
+    /** Focus the local Editar e Enviar draft after its composer becomes visible. */
+    public void focusUltraTelMediaComposer() {
+        if (!BuildVars.isBetaApp() || ultraTelTextSendInterceptor == null || messageEditText == null) {
+            return;
+        }
+        messageEditText.setEnabled(true);
+        messageEditText.setFocusable(true);
+        messageEditText.setFocusableInTouchMode(true);
+        messageEditText.setClickable(true);
+        if (messageEditText.getInputType() != commonInputType) {
+            messageEditText.setInputType(commonInputType);
+        }
+        messageEditText.requestFocus();
+        messageEditText.post(() -> {
+            if (ultraTelTextSendInterceptor != null && messageEditText != null
+                    && messageEditText.isShown()) {
+                messageEditText.requestFocus();
+                openKeyboard();
+            }
+        });
+    }
+
     public void closeKeyboard() {
         AndroidUtilities.hideKeyboard(messageEditText);
     }

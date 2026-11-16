@@ -34422,13 +34422,12 @@ public class ChatActivity extends BaseFragment implements
         // A delayed caption assignment mirrors Turbo Tel's first keyboard
         // opening on read-only source chats, after the input becomes visible.
         final CharSequence captionDraft = editableCaption == null ? "" : editableCaption;
-        chatActivityEnterView.setFieldFocused();
+        chatActivityEnterView.focusUltraTelMediaComposer();
         AndroidUtilities.runOnUIThread(() -> {
             if (ultraTelMediaComposerActive && composerGeneration == ultraTelComposerGeneration
                     && chatActivityEnterView != null && getParentActivity() != null) {
                 chatActivityEnterView.setFieldText(captionDraft);
-                chatActivityEnterView.setFieldFocused();
-                chatActivityEnterView.openKeyboard();
+                chatActivityEnterView.focusUltraTelMediaComposer();
             }
         }, 200);
     }
