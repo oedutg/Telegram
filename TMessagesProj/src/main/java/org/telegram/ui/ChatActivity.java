@@ -34359,13 +34359,11 @@ public class ChatActivity extends BaseFragment implements
         if (bottomOverlay != null) {
             bottomOverlay.setVisibility(View.INVISIBLE);
         }
-        chatActivityEnterView.setVisibility(View.VISIBLE);
         final Runnable clearDraft = () -> {
             // A recipient picker can finish after the user cancels or starts
             // another draft. Never clear the newer session from an old callback.
             if (!ultraTelMediaComposerActive || composerGeneration != ultraTelComposerGeneration
                     || chatActivityEnterView == null) return;
-            ultraTelMediaComposerActive = false;
             ultraTelComposerGeneration++;
             // Clear the isolated caption while the local interceptor still
             // protects read-only chats from the native restricted-field path.
@@ -34373,6 +34371,8 @@ public class ChatActivity extends BaseFragment implements
             chatActivityEnterView.closeKeyboard();
             chatActivityEnterView.setUltraTelMediaPreview(null, 0, null);
             chatActivityEnterView.setUltraTelTextSendInterceptor(null);
+            ultraTelMediaComposerActive = false;
+            onBottomItemsVisibilityChanged();
             // Restore the source conversation's real input restrictions and
             // original bottom action bar on explicit cancellation/completion.
             updateBottomOverlay(false);
@@ -34425,6 +34425,10 @@ public class ChatActivity extends BaseFragment implements
                         ChatActivity.this, savedMedia, edited, clearDraft);
             }
         });
+        // Install the interceptor before exposing the restricted-chat editor.
+        chatActivityEnterView.setVisibility(View.VISIBLE);
+        onBottomItemsVisibilityChanged();
+        chatActivityEnterView.checkSendButton(false);
         chatActivityEnterView.setUltraTelMediaPreview(first, savedMedia.size(), clearDraft);
         // A delayed caption assignment mirrors Turbo Tel's first keyboard
         // opening on read-only source chats, after the input becomes visible.
@@ -47709,6 +47713,9 @@ public class ChatActivity extends BaseFragment implements
     private void onBottomItemsVisibilityChanged() {
         checkBottomViewVisibility(actionsButtonsLayout, MESSAGE_ACTION_CONTAINER, true);
         checkBottomViewVisibility(chatActivityEnterView, MESSAGE_INPUT_CONTAINER, false);
+        if (BuildVars.isBetaApp() && ultraTelMediaComposerActive && chatActivityEnterView != null) {
+            chatActivityEnterView.setAlpha(1.0f);
+        }
         checkBottomViewVisibility(searchContainer, MESSAGE_SEARCH_CONTAINER, true);
         checkBottomViewVisibility(bottomChannelButtonsLayout, BOTTOM_OVERLAY_CHAT_CONTAINER, false);
         checkBottomViewVisibility(bottomOverlay, BOTTOM_OVERLAY_TEXT_CONTAINER, false);
@@ -47722,7 +47729,8 @@ public class ChatActivity extends BaseFragment implements
             actionsButtonsLayout.setTotalVisibilityFactor(hideFactor);
         }
         if (chatActivityEnterView != null) {
-            chatActivityEnterView.setTranslationY(dp(54) * hideFactor);
+            chatActivityEnterView.setTranslationY(
+                    BuildVars.isBetaApp() && ultraTelMediaComposerActive ? 0 : dp(54) * hideFactor);
         }
         if (searchContainer != null) {
             searchContainer.setTranslationY(dp(54) * hideFactor);
