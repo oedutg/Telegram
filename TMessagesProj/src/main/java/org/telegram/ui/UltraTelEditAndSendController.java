@@ -148,12 +148,10 @@ public final class UltraTelEditAndSendController {
         }
 
         final long pickerSession = currentPickerSession(host);
-        final long pickerSession = currentPickerSession(host);
         ShareAlert picker = new ShareAlert(host.getParentActivity(),
                 (ArrayList<MessageObject>) null, "", false, null, false);
         picker.setUltraTelEditedMediaRecipientCallback((dialogIds, topics, withSound,
                 pickerComment, includeText, includeQuote) -> {
-            if (!isCurrentPickerSession(host, pickerSession)) return false;
             if (!isCurrentPickerSession(host, pickerSession)) return false;
             CharSequence edited = includeText ? (caption == null ? "" : caption) : "";
             if (includeText && !TextUtils.isEmpty(pickerComment)) {
@@ -176,10 +174,12 @@ public final class UltraTelEditAndSendController {
         if (host == null || host.getParentActivity() == null
                 || !isEditableTextMessage(source)) return;
 
+        final long pickerSession = currentPickerSession(host);
         ShareAlert picker = new ShareAlert(host.getParentActivity(),
                 (ArrayList<MessageObject>) null, "", false, null, false);
         picker.setUltraTelEditedMediaRecipientCallback((dialogIds, topics, withSound,
                 pickerComment, includeText, includeQuote) -> {
+            if (!isCurrentPickerSession(host, pickerSession)) return false;
             CharSequence outgoing = includeText ? (editedText == null ? "" : editedText) : "";
             if (includeText && !TextUtils.isEmpty(pickerComment)) {
                 outgoing = TextUtils.isEmpty(outgoing) ? pickerComment
