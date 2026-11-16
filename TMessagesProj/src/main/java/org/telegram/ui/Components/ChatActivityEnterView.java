@@ -274,6 +274,10 @@ public class ChatActivityEnterView extends FrameLayout implements
 
     public void setUltraTelTextSendInterceptor(UltraTelTextSendInterceptor interceptor) {
         ultraTelTextSendInterceptor = BuildVars.isBetaApp() ? interceptor : null;
+        // Refresh field permissions when the isolated media editor starts or ends.
+        if (messageEditText != null) {
+            updateFieldHint(false);
+        }
         if (ultraTelTextSendInterceptor != null
                 && messageEditText != null && !ultraTelTextSendWatcherInstalled) {
             messageEditText.addTextChangedListener(ultraTelTextSendClearWatcher);
@@ -7071,7 +7075,10 @@ public class ChatActivityEnterView extends FrameLayout implements
             messageEditText.setHintText2(overrideHint2, animated);
             return;
         }
-        if (!sendPlainEnabled && !isEditingMessage()) {
+        // Read-only source chats must not disable or erase an Editar e Enviar draft.
+        // The send action is intercepted and opens the recipient picker instead.
+        if (!sendPlainEnabled && !isEditingMessage()
+                && !(BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null)) {
             SpannableStringBuilder spannableStringBuilder = new SpannableStringBuilder(" d " + getString("PlainTextRestrictedHint", R.string.PlainTextRestrictedHint));
             spannableStringBuilder.setSpan(new ColoredImageSpan(R.drawable.msg_mini_lock3), 1, 2, 0);
             messageEditText.setHintText(spannableStringBuilder, animated);
