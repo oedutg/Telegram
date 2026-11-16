@@ -5686,7 +5686,8 @@ public class ChatActivityEnterView extends FrameLayout implements
             if (stickersDragging || stickersExpansionAnim != null) {
                 return false;
             }
-            if (!sendPlainEnabled && !isEditingMessage()) {
+            if (!sendPlainEnabled && !isEditingMessage()
+                    && !(BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null)) {
                 if (canvasButton == null) {
                     canvasButton = new CanvasButton(this);
                     canvasButton.setDelegate(() -> {
@@ -5925,7 +5926,8 @@ public class ChatActivityEnterView extends FrameLayout implements
 
         @Override
         public boolean requestFocus(int direction, Rect previouslyFocusedRect) {
-            if (!sendPlainEnabled && !isEditingMessage()) {
+            if (!sendPlainEnabled && !isEditingMessage()
+                    && !(BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null)) {
                 return false;
             }
             onKeyboardShown();
