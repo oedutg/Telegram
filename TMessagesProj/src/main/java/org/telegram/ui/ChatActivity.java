@@ -1249,6 +1249,7 @@ public class ChatActivity extends BaseFragment implements
     private static final int OPTION_ULTRATEL_EDIT_AND_SEND = 100502;
     private static final int OPTION_ULTRATEL_DIRECT_FORWARD = 100503;
     private boolean ultraTelMediaComposerActive;
+    private int ultraTelComposerGeneration;
     public final static int OPTION_COPY = 3;
     public final static int OPTION_SAVE_TO_GALLERY = 4;
     public final static int OPTION_APPLY_LOCALIZATION_OR_THEME = 5;
@@ -3349,6 +3350,7 @@ public class ChatActivity extends BaseFragment implements
         if (chatActivityEnterView != null) {
             // A pending recipient picker must not leave an interceptor behind.
             ultraTelMediaComposerActive = false;
+            ultraTelComposerGeneration++;
             chatActivityEnterView.setUltraTelTextSendInterceptor(null);
             chatActivityEnterView.setUltraTelMediaPreview(null, 0, null);
             chatActivityEnterView.onDestroy();
@@ -34345,6 +34347,7 @@ public class ChatActivity extends BaseFragment implements
 
         final MessageObject first = savedMedia.get(0);
         ultraTelMediaComposerActive = true;
+        final int composerGeneration = ++ultraTelComposerGeneration;
         // Read-only channels and restricted groups replace the input field
         // with the channel action bar (e.g. "Ativar som"). Editing is only a
         // local draft, and the Send interceptor always opens a destination
@@ -34360,6 +34363,7 @@ public class ChatActivity extends BaseFragment implements
         final Runnable clearDraft = () -> {
             if (!ultraTelMediaComposerActive || chatActivityEnterView == null) return;
             ultraTelMediaComposerActive = false;
+            ultraTelComposerGeneration++;
             chatActivityEnterView.setUltraTelTextSendInterceptor(null);
             chatActivityEnterView.setUltraTelMediaPreview(null, 0, null);
             chatActivityEnterView.setFieldText("");
@@ -34420,8 +34424,8 @@ public class ChatActivity extends BaseFragment implements
         final CharSequence captionDraft = editableCaption == null ? "" : editableCaption;
         chatActivityEnterView.setFieldFocused();
         AndroidUtilities.runOnUIThread(() -> {
-            if (ultraTelMediaComposerActive && chatActivityEnterView != null
-                    && getParentActivity() != null) {
+            if (ultraTelMediaComposerActive && composerGeneration == ultraTelComposerGeneration
+                    && chatActivityEnterView != null && getParentActivity() != null) {
                 chatActivityEnterView.setFieldText(captionDraft);
                 chatActivityEnterView.setFieldFocused();
                 chatActivityEnterView.openKeyboard();
