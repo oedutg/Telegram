@@ -28546,6 +28546,17 @@ public class ChatActivity extends BaseFragment implements
         if (bottomOverlayChatText == null || chatMode == MODE_SCHEDULED || getContext() == null) {
             return;
         }
+        // Never let an automatic chat-permission/overlay refresh dismiss the
+        // temporary Editar e Enviar composer while its draft is still active.
+        // The original source remains read-only: sending is intercepted and
+        // redirected exclusively to the recipient picker.
+        if (BuildVars.isBetaApp() && ultraTelMediaComposerActive
+                && chatActivityEnterView != null && bottomChannelButtonsLayout != null) {
+            bottomChannelButtonsLayout.setVisibility(View.INVISIBLE);
+            bottomChannelButtonsLayout.updateWrappingVisible(false);
+            chatActivityEnterView.setVisibility(View.VISIBLE);
+            return;
+        }
         bottomOverlayChatWaitsReply = false;
         bottomOverlayLinks = false;
 
@@ -34321,12 +34332,25 @@ public class ChatActivity extends BaseFragment implements
 
         final MessageObject first = savedMedia.get(0);
         ultraTelMediaComposerActive = true;
+        // Read-only channels and restricted groups replace the input field
+        // with the channel action bar (e.g. "Ativar som"). Editing is only a
+        // local draft, and the Send interceptor always opens a destination
+        // picker; it must remain possible without posting in the source chat.
+        if (bottomChannelButtonsLayout != null) {
+            bottomChannelButtonsLayout.setVisibility(View.INVISIBLE);
+            bottomChannelButtonsLayout.updateWrappingVisible(false);
+        }
+        chatActivityEnterView.setVisibility(View.VISIBLE);
         final Runnable clearDraft = () -> {
             if (!ultraTelMediaComposerActive || chatActivityEnterView == null) return;
             ultraTelMediaComposerActive = false;
             chatActivityEnterView.setUltraTelTextSendInterceptor(null);
             chatActivityEnterView.setUltraTelMediaPreview(null, 0, null);
             chatActivityEnterView.setFieldText("");
+            chatActivityEnterView.closeKeyboard();
+            // Restore the source conversation's real input restrictions and
+            // original bottom action bar on explicit cancellation/completion.
+            updateBottomOverlay(false);
         };
 
         // Match Turbo Tel: the caption starts as the native formatted caption,
