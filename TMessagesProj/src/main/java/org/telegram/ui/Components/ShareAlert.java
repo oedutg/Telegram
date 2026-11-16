@@ -1222,14 +1222,14 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
             @Override
             protected boolean allowSelectChildAtPosition(float x, float y) {
-                return y >= dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)) + systemInsets.top;
+                return y >= dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)) + systemInsets.top;
             }
 
             @Override
             public void draw(Canvas canvas) {
                 if (topicsGridView.getVisibility() != View.GONE) {
                     canvas.save();
-                    canvas.clipRect(0, scrollOffsetY + dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)), getWidth(), getHeight());
+                    canvas.clipRect(0, scrollOffsetY + dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)), getWidth(), getHeight());
                 }
                 super.draw(canvas);
                 if (topicsGridView.getVisibility() != View.GONE) {
@@ -1331,14 +1331,14 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
             @Override
             protected boolean allowSelectChildAtPosition(float x, float y) {
-                return y >= dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)) + systemInsets.top;
+                return y >= dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)) + systemInsets.top;
             }
 
             @Override
             public void draw(Canvas canvas) {
                 if (topicsGridView.getVisibility() != View.GONE) {
                     canvas.save();
-                    canvas.clipRect(0, scrollOffsetY + dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)), getWidth(), getHeight());
+                    canvas.clipRect(0, scrollOffsetY + dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)), getWidth(), getHeight());
                 }
                 super.draw(canvas);
                 if (topicsGridView.getVisibility() != View.GONE) {
@@ -2080,15 +2080,31 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         if (listAdapter != null) listAdapter.fetchDialogs();
     }
 
-    /** Enable only from an explicit UltraTel Beta bulk-send entry point. */
+    /** Envio Múltiplo shares Turbo Tel's native picker header, but retains
+     * its independent private-chat eligibility, 20 recipients and cooldown. */
     public void setUltraTelBulkMode(boolean enabled) {
         ultraTelBulkMode = enabled && BuildVars.isBetaApp();
         ultraTelBulkConfirmed = false;
         ultraTelBulkDispatching = false;
         if (ultraTelSelectAllSwitch != null) {
-            ultraTelSelectAllSwitch.setVisibility((ultraTelBulkMode || ultraTelEditedMediaMode) ? View.VISIBLE : View.GONE);
+            ultraTelSelectAllSwitch.setVisibility(View.GONE);
+        }
+        if (ultraTelBulkMode) {
+            setupUltraTelEditControls();
+            ultraTelIncludeText = true;
+            ultraTelIncludeQuote = true;
+            showSendersName = true;
+            ultraTelEditText.setEnabled(true);
+            ultraTelEditText.setChecked(true, false);
+            ultraTelEditQuote.setChecked(true, false);
+            ultraTelEditControls.setVisibility(View.VISIBLE);
+            ultraTelFolderTabs.setVisibility(View.VISIBLE);
+            NotificationCenter.getInstance(currentAccount).addWeakObserver(
+                    this, NotificationCenter.dialogsNeedReload);
         }
         if (listAdapter != null) listAdapter.fetchDialogs();
+        if (searchAdapter != null) searchAdapter.notifyDataSetChanged();
+        updateUltraTelSelectAllState();
     }
 
     /**
@@ -2317,7 +2333,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
         ultraTelUpdatingSelectAll = true;
         boolean checked = eligible > 0 && selected == eligible;
-        if (ultraTelEditedMediaMode && ultraTelEditAll != null) {
+        if ((ultraTelEditedMediaMode || ultraTelBulkMode) && ultraTelEditAll != null) {
             ultraTelEditAll.setChecked(checked, true);
         } else if (ultraTelSelectAllSwitch != null) {
             ultraTelSelectAllSwitch.setChecked(checked);
@@ -2655,7 +2671,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
         LinearLayout layout = new LinearLayout(getContext());
         layout.setOrientation(LinearLayout.VERTICAL);
-        if (sendingMessageObjects != null) {
+        if (sendingMessageObjects != null && !ultraTelBulkMode) {
             ActionBarPopupWindow.ActionBarPopupWindowLayout sendPopupLayout1 = new ActionBarPopupWindow.ActionBarPopupWindowLayout(parentActivity, resourcesProvider);
             if (darkTheme) {
                 ThemeBind.backgroundColor(sendPopupLayout1, Theme.key_voipgroup_inviteMembersBackground, resourcesProvider);
@@ -2973,7 +2989,11 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                         params.monoForumPeer = monoForumPeerId;
                         SendMessagesHelper.getInstance(currentAccount).sendMessage(params);
                     }
-                    result = SendMessagesHelper.getInstance(currentAccount).sendMessage(sendingMessageObjects, key, !showSendersName,false, withSound, 0, 0, replyTopMsg, video_timestamp, price == null ? 0 : price, monoForumPeerId, null);
+                    // The two native Turbo Tel switches govern forwarded
+                    // captions and attribution on bulk sends.
+                    boolean includeSender = ultraTelBulkMode ? ultraTelIncludeQuote : showSendersName;
+                    boolean hideCaption = ultraTelBulkMode && !ultraTelIncludeText;
+                    result = SendMessagesHelper.getInstance(currentAccount).sendMessage(sendingMessageObjects, key, !includeSender, hideCaption, withSound, 0, 0, replyTopMsg, video_timestamp, price == null ? 0 : price, monoForumPeerId, null);
                     if (result != 0) {
                         removeKeys.add(key);
                     }
@@ -3398,15 +3418,16 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 dialogs.add(d);
                 dialogsMap.put(d.id, d);
             }
-            if ((!ultraTelEditedMediaMode || ultraTelFolderIndex == 0)
-                    && !MessagesController.getInstance(currentAccount).dialogsForward.isEmpty()) {
+            if (!(ultraTelEditedMediaMode || ultraTelBulkMode) || ultraTelFolderIndex == 0) {
+                if (!MessagesController.getInstance(currentAccount).dialogsForward.isEmpty()) {
                 TLRPC.Dialog dialog = MessagesController.getInstance(currentAccount).dialogsForward.get(0);
                 dialogs.add(dialog);
                 dialogsMap.put(dialog.id, dialog);
+                }
             }
             ArrayList<TLRPC.Dialog> archivedDialogs = new ArrayList<>();
             ArrayList<TLRPC.Dialog> allDialogs = MessagesController.getInstance(currentAccount).getAllDialogs();
-            if (ultraTelEditedMediaMode && ultraTelFolderIndex > 0) {
+            if ((ultraTelEditedMediaMode || ultraTelBulkMode) && ultraTelFolderIndex > 0) {
                 ArrayList<MessagesController.DialogFilter> filters =
                         MessagesController.getInstance(currentAccount).dialogFilters;
                 if (filters != null && ultraTelFolderIndex < filters.size()) {
@@ -3552,7 +3573,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 case 1:
                 default: {
                     view = new View(context);
-                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 109 : 56))));
+                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : (darkTheme && linkToCopy[1] != null ? 109 : 56))));
                     break;
                 }
             }
@@ -3563,7 +3584,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
             if (holder.getItemViewType() == 1) {
                 ViewGroup.LayoutParams lp = holder.itemView.getLayoutParams();
-                int height = dp(ultraTelEditedMediaMode ? 108
+                int height = dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108
                         : (darkTheme && linkToCopy[1] != null ? 109 : 56));
                 if (lp != null && lp.height != height) {
                     lp.height = height;
@@ -4108,7 +4129,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 default:
                 case 1: {
                     view = new View(context);
-                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, dp(ultraTelEditedMediaMode ? 108 : (darkTheme && linkToCopy[1] != null ? 109 : 56))));
+                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : (darkTheme && linkToCopy[1] != null ? 109 : 56))));
                     break;
                 }
                 case 2: {
@@ -4216,7 +4237,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
             if (holder.getItemViewType() == 1) {
                 ViewGroup.LayoutParams lp = holder.itemView.getLayoutParams();
-                int height = dp(ultraTelEditedMediaMode ? 108
+                int height = dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108
                         : (darkTheme && linkToCopy[1] != null ? 109 : 56));
                 if (lp != null && lp.height != height) {
                     lp.height = height;
