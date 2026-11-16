@@ -277,6 +277,15 @@ public class ChatActivityEnterView extends FrameLayout implements
         // Refresh field permissions when the isolated media editor starts or ends.
         if (messageEditText != null) {
             updateFieldHint(false);
+            if (ultraTelTextSendInterceptor != null) {
+                // The source channel may have disabled the EditText before
+                // the edit-and-send draft was installed.
+                messageEditText.setEnabled(true);
+                messageEditText.setFocusable(true);
+                messageEditText.setFocusableInTouchMode(true);
+                messageEditText.setInputType(commonInputType);
+                messageEditText.setClickable(true);
+            }
         }
         if (ultraTelTextSendInterceptor != null
                 && messageEditText != null && !ultraTelTextSendWatcherInstalled) {
@@ -7070,7 +7079,9 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (messageEditText == null) {
             return;
         }
-        if (overrideHint != null) {
+        // A restricted chat may retain a read-only hint. Do not let it
+        // short-circuit restoring keyboard input for an UltraTel draft.
+        if (overrideHint != null && !(BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null)) {
             messageEditText.setHintText(overrideHint, animated);
             messageEditText.setHintText2(overrideHint2, animated);
             return;
