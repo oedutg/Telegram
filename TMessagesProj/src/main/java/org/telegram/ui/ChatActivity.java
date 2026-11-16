@@ -28554,6 +28554,11 @@ public class ChatActivity extends BaseFragment implements
                 && chatActivityEnterView != null && bottomChannelButtonsLayout != null) {
             bottomChannelButtonsLayout.setVisibility(View.INVISIBLE);
             bottomChannelButtonsLayout.updateWrappingVisible(false);
+            // The restricted-chat notice is a clickable, focusable overlay.
+            // It must not cover the local edit-and-send input.
+            if (bottomOverlay != null) {
+                bottomOverlay.setVisibility(View.INVISIBLE);
+            }
             chatActivityEnterView.setVisibility(View.VISIBLE);
             return;
         }
@@ -34340,6 +34345,9 @@ public class ChatActivity extends BaseFragment implements
             bottomChannelButtonsLayout.setVisibility(View.INVISIBLE);
             bottomChannelButtonsLayout.updateWrappingVisible(false);
         }
+        if (bottomOverlay != null) {
+            bottomOverlay.setVisibility(View.INVISIBLE);
+        }
         chatActivityEnterView.setVisibility(View.VISIBLE);
         final Runnable clearDraft = () -> {
             if (!ultraTelMediaComposerActive || chatActivityEnterView == null) return;
@@ -34351,6 +34359,7 @@ public class ChatActivity extends BaseFragment implements
             // Restore the source conversation's real input restrictions and
             // original bottom action bar on explicit cancellation/completion.
             updateBottomOverlay(false);
+            updateSecretStatus();
         };
 
         // Match Turbo Tel: the caption starts as the native formatted caption,
