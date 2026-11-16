@@ -251,6 +251,8 @@ public class ChatActivityEnterView extends FrameLayout implements
     private UltraTelTextSendInterceptor ultraTelTextSendInterceptor;
     private FrameLayout ultraTelMediaPreview;
     private int ultraTelPreviousEditorMaxLines = -1;
+    private int ultraTelPreviousEditorMaxHeight = -1;
+    private boolean ultraTelPreviousVerticalScrollBarEnabled;
     private boolean ultraTelPreviousFocusable;
     private boolean ultraTelPreviousFocusableInTouchMode;
     private boolean ultraTelPreviousClickable;
@@ -288,15 +290,26 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (messageEditText != null) {
             if (ultraTelTextSendInterceptor != null && !wasEditingLocally) {
                 ultraTelPreviousEditorMaxLines = messageEditText.getMaxLines();
+                ultraTelPreviousEditorMaxHeight = messageEditText.getMaxHeight();
+                ultraTelPreviousVerticalScrollBarEnabled = messageEditText.isVerticalScrollBarEnabled();
                 ultraTelPreviousFocusable = messageEditText.isFocusable();
                 ultraTelPreviousFocusableInTouchMode = messageEditText.isFocusableInTouchMode();
                 ultraTelPreviousClickable = messageEditText.isClickable();
                 ultraTelPreviousFocused = messageEditText.hasFocus();
                 ultraTelPreviousEnabled = messageEditText.isEnabled();
                 messageEditText.setMaxLines(4);
+                // Keep the native caption editor compact even for very long messages.
+                // The EditText scrolls internally instead of expanding the chat panel.
+                messageEditText.setMaxHeight(
+                        messageEditText.getLineHeight() * 4
+                                + messageEditText.getPaddingTop() + messageEditText.getPaddingBottom());
+                messageEditText.setVerticalScrollBarEnabled(true);
             } else if (ultraTelTextSendInterceptor == null && wasEditingLocally
                     && ultraTelPreviousEditorMaxLines > 0) {
                 messageEditText.setMaxLines(ultraTelPreviousEditorMaxLines);
+                messageEditText.setMaxHeight(ultraTelPreviousEditorMaxHeight);
+                ultraTelPreviousEditorMaxHeight = -1;
+                messageEditText.setVerticalScrollBarEnabled(ultraTelPreviousVerticalScrollBarEnabled);
                 ultraTelPreviousEditorMaxLines = -1;
             }
         }
@@ -8290,7 +8303,8 @@ public class ChatActivityEnterView extends FrameLayout implements
         updateSendButtonPaid();
         final CharSequence message = messageEditText == null ? "" : AndroidUtilities.getTrimmedString(messageEditText.getTextToUse());
         boolean shownSendButton = false;
-        if (slowModeTimer > 0 && slowModeTimer != Integer.MAX_VALUE && !isSlowModeIgnored()) {
+        if (slowModeTimer > 0 && slowModeTimer != Integer.MAX_VALUE && !isSlowModeIgnored()
+                && !(BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null)) {
             if (slowModeButton.getVisibility() != VISIBLE) {
                 if (animated) {
                     if (runningAnimationType == 5) {
@@ -10885,6 +10899,9 @@ public class ChatActivityEnterView extends FrameLayout implements
         ignoreTextChange = false;
         if (ignoreChange && delegate != null) {
             delegate.onTextChanged(messageEditText.getText(), true, fromDraft);
+        }
+        if (BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null) {
+            checkSendButton(false);
         }
     }
 
@@ -15304,7 +15321,8 @@ public class ChatActivityEnterView extends FrameLayout implements
     }
 
     private boolean isSendButtonEnabled() {
-        return sendButtonEnabled && streamingState != BotForumHelper.SteamingSendButtonState.BLOCKING;
+        return (BuildVars.isBetaApp() && ultraTelTextSendInterceptor != null)
+                || (sendButtonEnabled && streamingState != BotForumHelper.SteamingSendButtonState.BLOCKING);
     }
 
     private void updateAttachButtonTranslationX() {
