@@ -8319,7 +8319,7 @@ public class ChatActivityEnterView extends FrameLayout implements
             if (attachLayout != null) attachLayout.setVisibility(GONE);
             if (expandStickersButton != null) expandStickersButton.setVisibility(GONE);
             if (slowModeButton != null) setSlowModeButtonVisible(false);
-            SendButton localSendButton = getSendButtonInternal();
+            View localSendButton = getSendButtonInternal();
             if (localSendButton != null) {
                 localSendButton.setVisibility(VISIBLE);
                 localSendButton.setAlpha(1.0f);
