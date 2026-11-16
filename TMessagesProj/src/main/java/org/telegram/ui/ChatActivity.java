@@ -34347,13 +34347,30 @@ public class ChatActivity extends BaseFragment implements
         CharSequence editableCaption = MessageObject.replaceAnimatedEmoji(
                 new android.text.SpannableStringBuilder(renderedCaption),
                 captionSource.messageOwner.entities,
-                new android.graphics.Paint().getFontMetricsInt());
+                chatActivityEnterView.getUltraTelComposerFontMetrics());
+        // Same rendering cache as emojis inserted from Telegram's native
+        // composer. Generic Paint metrics previously shrank Premium emojis.
+        if (editableCaption instanceof android.text.Spanned) {
+            android.text.Spanned styled = (android.text.Spanned) editableCaption;
+            org.telegram.ui.Components.AnimatedEmojiSpan[] spans = styled.getSpans(
+                    0, styled.length(), org.telegram.ui.Components.AnimatedEmojiSpan.class);
+            for (org.telegram.ui.Components.AnimatedEmojiSpan emoji : spans) {
+                emoji.cacheType =
+                        org.telegram.ui.Components.AnimatedEmojiDrawable.getCacheTypeForEnterView();
+            }
+        }
         chatActivityEnterView.setUltraTelMediaPreview(first, savedMedia.size(), clearDraft);
         chatActivityEnterView.setFieldText(editableCaption == null ? "" : editableCaption);
         chatActivityEnterView.setUltraTelTextSendInterceptor(edited -> {
             if (!ultraTelMediaComposerActive || getParentActivity() == null) return;
-            UltraTelEditAndSendController.openRemoteMediaRecipientPicker(
-                    ChatActivity.this, savedMedia, edited, clearDraft);
+            if (savedMedia.size() == 1 &&
+                    UltraTelEditAndSendController.isEditableTextMessage(savedMedia.get(0))) {
+                UltraTelEditAndSendController.openTextRecipientPicker(
+                        ChatActivity.this, savedMedia.get(0), edited, clearDraft);
+            } else {
+                UltraTelEditAndSendController.openRemoteMediaRecipientPicker(
+                        ChatActivity.this, savedMedia, edited, clearDraft);
+            }
         });
         chatActivityEnterView.setFieldFocused();
         AndroidUtilities.runOnUIThread(() -> {

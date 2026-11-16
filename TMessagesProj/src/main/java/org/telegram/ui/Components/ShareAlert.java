@@ -2194,7 +2194,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
             @Override public boolean isTabMenuVisible() { return false; }
             @Override public void onDeletePressed(int id) {}
             @Override public void onPageReorder(int fromId, int toId) {}
-            @Override public boolean canPerformActions() { return false; }
+            @Override public boolean canPerformActions() { return true; }
         });
         frameLayout.addView(ultraTelFolderTabs, LayoutHelper.createFrame(
                 LayoutHelper.MATCH_PARENT, 43, Gravity.TOP | Gravity.LEFT, 0, 61, 0, 0));
@@ -3411,10 +3411,20 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                         MessagesController.getInstance(currentAccount).dialogFilters;
                 if (filters != null && ultraTelFolderIndex < filters.size()) {
                     MessagesController.DialogFilter folder = filters.get(ultraTelFolderIndex);
-                    if (folder.dialogs.isEmpty()) {
-                        MessagesController.getInstance(currentAccount).selectDialogFilter(folder, 0);
+                    // Filter the picker without changing Telegram's selected
+                    // chat folder globally. Unselected folders do not maintain
+                    // folder.dialogs, so using that list leaves tabs stuck or
+                    // empty after the user clicks ADM, Pessoal or Bots.
+                    ArrayList<TLRPC.Dialog> filtered = new ArrayList<>();
+                    for (TLRPC.Dialog candidate : allDialogs) {
+                        if (candidate instanceof TLRPC.TL_dialog &&
+                                folder.includesDialog(
+                                        org.telegram.messenger.AccountInstance.getInstance(currentAccount),
+                                        candidate.id, candidate)) {
+                            filtered.add(candidate);
+                        }
                     }
-                    allDialogs = new ArrayList<>(folder.dialogs);
+                    allDialogs = filtered;
                 }
             }
             for (int a = 0; a < allDialogs.size(); a++) {

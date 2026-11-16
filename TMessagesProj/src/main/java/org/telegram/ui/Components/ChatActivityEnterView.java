@@ -265,6 +265,13 @@ public class ChatActivityEnterView extends FrameLayout implements
         @Override public void afterTextChanged(Editable text) {}
     };
 
+    /** Use the actual edit box font metrics for forwarded Premium emoji spans. */
+    public android.graphics.Paint.FontMetricsInt getUltraTelComposerFontMetrics() {
+        return messageEditText != null
+                ? messageEditText.getPaint().getFontMetricsInt()
+                : Theme.chat_msgTextPaint.getFontMetricsInt();
+    }
+
     public void setUltraTelTextSendInterceptor(UltraTelTextSendInterceptor interceptor) {
         ultraTelTextSendInterceptor = BuildVars.isBetaApp() ? interceptor : null;
         if (ultraTelTextSendInterceptor != null
@@ -337,8 +344,12 @@ public class ChatActivityEnterView extends FrameLayout implements
                 LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         TextView description = new TextView(getContext());
-        String type = source.isVideo() ? "Vídeo" : source.isGif() ? "GIF" : "Foto";
+        String type = source.isVideo() ? "Vídeo" : source.isGif() ? "GIF"
+                : source.type == MessageObject.TYPE_TEXT ? "Mensagem" : "Foto";
         description.setText(count > 1 ? count + " mídias" : type);
+        if (source.type == MessageObject.TYPE_TEXT) {
+            thumbnail.setVisibility(View.GONE);
+        }
         description.setTextColor(getThemedColor(Theme.key_chat_messagePanelText));
         description.setAlpha(0.72f);
         description.setTextSize(13);

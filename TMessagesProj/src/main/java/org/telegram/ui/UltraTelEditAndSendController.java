@@ -44,7 +44,17 @@ public final class UltraTelEditAndSendController {
             }
             return true;
         }
-        return canOfferSingleMedia(source);
+        return canOfferSingleMedia(source) || isEditableTextMessage(source);
+    }
+
+    /** Text and link-preview messages use the same editor and recipient picker. */
+    public static boolean isEditableTextMessage(MessageObject source) {
+        return source != null && source.messageOwner != null
+                && source.type == MessageObject.TYPE_TEXT
+                && source.messageOwner.action == null
+                && !source.messageOwner.noforwards
+                && source.canForwardMessage()
+                && !TextUtils.isEmpty(source.messageOwner.message);
     }
 
     private static boolean canOfferSingleMedia(MessageObject source) {
@@ -52,7 +62,8 @@ public final class UltraTelEditAndSendController {
                 && source.messageOwner.action == null
                 && !source.messageOwner.noforwards && source.canForwardMessage()
                 && (source.isPhoto() || source.isVideo() || source.isGif()
-                    || source.isSticker() || source.isAnimatedSticker() || source.isVideoSticker());
+                    || source.isSticker() || source.isAnimatedSticker() || source.isVideoSticker()
+                    || source.getDocument() instanceof TLRPC.TL_document);
     }
 
     /**
@@ -65,7 +76,7 @@ public final class UltraTelEditAndSendController {
                 || sources == null || sources.isEmpty()) return;
         final ArrayList<MessageObject> safeSources = new ArrayList<>(sources);
         for (MessageObject source : safeSources) {
-            if (!canOfferSingleMedia(source)) return;
+            if (!canOfferSingleMedia(source) && !isEditableTextMessage(source)) return;
         }
 
         // Stickers and GIFs go immediately to recipients, without requiring
@@ -129,6 +140,104 @@ public final class UltraTelEditAndSendController {
                     withSound, onSent, includeText, includeQuote);
         }, skipCaption);
         host.showDialog(picker);
+    }
+
+    /**
+     * Edit a forwarded text message (including messages with web previews)
+     * in the same native composer. Interactive bot keyboards remain owned
+     * by the bot and are not copied into user-created messages.
+     */
+    public static void openTextRecipientPicker(ChatActivity host, MessageObject source,
+            CharSequence editedText, Runnable onSent) {
+        if (host == null || host.getParentActivity() == null
+                || !isEditableTextMessage(source)) return;
+
+        ShareAlert picker = new ShareAlert(host.getParentActivity(),
+                (ArrayList<MessageObject>) null, "", false, null, false);
+        picker.setUltraTelEditedMediaRecipientCallback((dialogIds, topics, withSound,
+                pickerComment, includeText, includeQuote) -> {
+            CharSequence outgoing = includeText ? (editedText == null ? "" : editedText) : "";
+            if (includeText && !TextUtils.isEmpty(pickerComment)) {
+                outgoing = TextUtils.isEmpty(outgoing) ? pickerComment
+                        : TextUtils.concat(outgoing, "\n", pickerComment);
+            }
+            if (!includeQuote && TextUtils.isEmpty(outgoing)) {
+                Toast.makeText(host.getParentActivity(),
+                        "Ative Texto ou Citar para enviar esta mensagem.",
+                        Toast.LENGTH_SHORT).show();
+                return false;
+            }
+            return sendEditedText(host, source, outgoing, dialogIds, topics,
+                    withSound, includeText, includeQuote, onSent);
+        });
+        host.showDialog(picker);
+    }
+
+    private static boolean sendEditedText(ChatActivity host, MessageObject source,
+            CharSequence outgoingText, ArrayList<Long> dialogIds,
+            Map<Long, TLRPC.TL_forumTopic> topics, boolean withSound,
+            boolean includeText, boolean includeQuote, Runnable onSent) {
+        if (host.getParentActivity() == null || dialogIds == null || dialogIds.isEmpty()) {
+            return false;
+        }
+        String original = source.messageOwner.message == null ? "" : source.messageOwner.message;
+        if (includeQuote && includeText && !TextUtils.equals(
+                outgoingText == null ? "" : outgoingText.toString(), original)) {
+            Toast.makeText(host.getParentActivity(),
+                    "Para enviar o texto editado, desmarque Citar.",
+                    Toast.LENGTH_LONG).show();
+            return false;
+        }
+
+        ArrayList<Long> paidDialogs = new ArrayList<>();
+        for (Long did : dialogIds) {
+            if (did == null || !isValidDestination(host, did)) {
+                Toast.makeText(host.getParentActivity(),
+                        "O Telegram não permite enviar para este destino.",
+                        Toast.LENGTH_SHORT).show();
+                return false;
+            }
+            long price = host.getMessagesController().getSendPaidMessagesStars(did);
+            if (price <= 0) price = DialogObject.getMessagesStarsPrice(
+                    host.getMessagesController().isUserContactBlocked(did));
+            if (price > 0) paidDialogs.add(did);
+        }
+        AlertsCreator.ensurePaidMessagesMultiConfirmation(host.getCurrentAccount(),
+                paidDialogs, paidDialogs.size(), prices -> {
+                    for (Long did : dialogIds) {
+                        Long stars = prices == null ? null : prices.get(did);
+                        long payStars = stars == null ? 0 : stars;
+                        TLRPC.TL_forumTopic topic = topics == null ? null : topics.get(did);
+                        boolean mono = topic != null && host.getMessagesController().isMonoForum(did);
+                        MessageObject replyTop = topic == null || mono ? null
+                                : new MessageObject(host.getCurrentAccount(),
+                                        topic.topicStartMessage, false, false);
+                        long monoPeer = mono ? DialogObject.getPeerDialogId(topic.from_id) : 0;
+                        if (includeQuote) {
+                            ArrayList<MessageObject> originals = new ArrayList<>();
+                            originals.add(source);
+                            host.getAccountInstance().getSendMessagesHelper().sendMessage(
+                                    originals, did, false, !includeText, withSound,
+                                    0, replyTop, -1, payStars);
+                        } else {
+                            CharSequence[] entityText = {outgoingText};
+                            ArrayList<TLRPC.MessageEntity> entities =
+                                    MediaDataController.getInstance(host.getCurrentAccount())
+                                            .getEntities(entityText, true);
+                            String text = entityText[0] == null ? "" : entityText[0].toString();
+                            SendMessagesHelper.SendMessageParams params =
+                                    SendMessagesHelper.SendMessageParams.of(
+                                            text, did, null, replyTop, null, true,
+                                            entities, null, null, withSound, 0, 0,
+                                            null, false);
+                            params.payStars = payStars;
+                            params.monoForumPeer = monoPeer;
+                            host.getAccountInstance().getSendMessagesHelper().sendMessage(params);
+                        }
+                    }
+                    if (onSent != null) onSent.run();
+                });
+        return true;
     }
 
     private static boolean isValidDestination(ChatActivity host, long did) {
