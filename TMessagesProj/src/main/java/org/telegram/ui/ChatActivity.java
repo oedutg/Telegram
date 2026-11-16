@@ -19494,6 +19494,12 @@ public class ChatActivity extends BaseFragment implements
         if (bottomOverlay == null) {
             return;
         }
+        // Local edit-and-send is not a post to the restricted source chat.
+        // This routine otherwise restores the restricted notice and hides the IME.
+        if (BuildVars.isBetaApp() && ultraTelMediaComposerActive) {
+            bottomOverlay.setVisibility(View.INVISIBLE);
+            return;
+        }
         boolean hideKeyboard = false;
         bottomOverlayText.setBackground(null);
         bottomOverlayText.setOnClickListener(null);
@@ -28551,9 +28557,11 @@ public class ChatActivity extends BaseFragment implements
         // The original source remains read-only: sending is intercepted and
         // redirected exclusively to the recipient picker.
         if (BuildVars.isBetaApp() && ultraTelMediaComposerActive
-                && chatActivityEnterView != null && bottomChannelButtonsLayout != null) {
-            bottomChannelButtonsLayout.setVisibility(View.INVISIBLE);
-            bottomChannelButtonsLayout.updateWrappingVisible(false);
+                && chatActivityEnterView != null) {
+            if (bottomChannelButtonsLayout != null) {
+                bottomChannelButtonsLayout.setVisibility(View.INVISIBLE);
+                bottomChannelButtonsLayout.updateWrappingVisible(false);
+            }
             // The restricted-chat notice is a clickable, focusable overlay.
             // It must not cover the local edit-and-send input.
             if (bottomOverlay != null) {
@@ -34392,8 +34400,9 @@ public class ChatActivity extends BaseFragment implements
                         org.telegram.ui.Components.AnimatedEmojiDrawable.getCacheTypeForEnterView();
             }
         }
-        chatActivityEnterView.setUltraTelMediaPreview(first, savedMedia.size(), clearDraft);
-        chatActivityEnterView.setFieldText(editableCaption == null ? "" : editableCaption);
+        // Install the local editing state BEFORE assigning the caption.
+        // Turbo Tel sets forwardingMessageObject before inserting text so
+        // permission refreshes treat it as an editable local draft.
         chatActivityEnterView.setUltraTelTextSendInterceptor(edited -> {
             if (!ultraTelMediaComposerActive || getParentActivity() == null) return;
             if (savedMedia.size() == 1 &&
@@ -34405,13 +34414,19 @@ public class ChatActivity extends BaseFragment implements
                         ChatActivity.this, savedMedia, edited, clearDraft);
             }
         });
+        chatActivityEnterView.setUltraTelMediaPreview(first, savedMedia.size(), clearDraft);
+        // A delayed caption assignment mirrors Turbo Tel's first keyboard
+        // opening on read-only source chats, after the input becomes visible.
+        final CharSequence captionDraft = editableCaption == null ? "" : editableCaption;
         chatActivityEnterView.setFieldFocused();
         AndroidUtilities.runOnUIThread(() -> {
             if (ultraTelMediaComposerActive && chatActivityEnterView != null
                     && getParentActivity() != null) {
+                chatActivityEnterView.setFieldText(captionDraft);
+                chatActivityEnterView.setFieldFocused();
                 chatActivityEnterView.openKeyboard();
             }
-        }, 150);
+        }, 200);
     }
 
     private void processSelectedOption(int option) {
