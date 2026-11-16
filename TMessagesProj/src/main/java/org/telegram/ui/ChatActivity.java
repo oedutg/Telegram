@@ -34361,7 +34361,10 @@ public class ChatActivity extends BaseFragment implements
         }
         chatActivityEnterView.setVisibility(View.VISIBLE);
         final Runnable clearDraft = () -> {
-            if (!ultraTelMediaComposerActive || chatActivityEnterView == null) return;
+            // A recipient picker can finish after the user cancels or starts
+            // another draft. Never clear the newer session from an old callback.
+            if (!ultraTelMediaComposerActive || composerGeneration != ultraTelComposerGeneration
+                    || chatActivityEnterView == null) return;
             ultraTelMediaComposerActive = false;
             ultraTelComposerGeneration++;
             // Clear the isolated caption while the local interceptor still
@@ -34410,7 +34413,9 @@ public class ChatActivity extends BaseFragment implements
         // Turbo Tel sets forwardingMessageObject before inserting text so
         // permission refreshes treat it as an editable local draft.
         chatActivityEnterView.setUltraTelTextSendInterceptor(edited -> {
-            if (!ultraTelMediaComposerActive || getParentActivity() == null) return;
+            // Reject callbacks retained by a dismissed picker or previous draft.
+            if (!ultraTelMediaComposerActive || composerGeneration != ultraTelComposerGeneration
+                    || getParentActivity() == null) return;
             if (savedMedia.size() == 1 &&
                     UltraTelEditAndSendController.isEditableTextMessage(savedMedia.get(0))) {
                 UltraTelEditAndSendController.openTextRecipientPicker(
