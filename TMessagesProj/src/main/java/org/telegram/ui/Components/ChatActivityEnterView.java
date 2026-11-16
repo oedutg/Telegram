@@ -251,17 +251,16 @@ public class ChatActivityEnterView extends FrameLayout implements
     private UltraTelTextSendInterceptor ultraTelTextSendInterceptor;
     private FrameLayout ultraTelMediaPreview;
     private int ultraTelPreviousEditorMaxLines = -1;
+    private boolean ultraTelPreviousTopViewShown;
     private boolean ultraTelOldForceShowSendButton;
     private int ultraTelOldComposerTopMargin;
     private boolean ultraTelTextSendWatcherInstalled;
     private final TextWatcher ultraTelTextSendClearWatcher = new TextWatcher() {
         @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
         @Override public void onTextChanged(CharSequence text, int start, int before, int count) {
-            // Clearing the composer cancels special edit-and-send mode, so
-            // subsequent normal typing can never be captured accidentally.
-            if (ultraTelTextSendInterceptor != null && ultraTelMediaPreview == null && TextUtils.isEmpty(text)) {
-                ultraTelTextSendInterceptor = null;
-            }
+            // The owner ChatActivity ends this draft through clearDraft().
+            // Never silently clear the interceptor here: doing so bypasses
+            // restoration of maxLines and the read-only source state.
         }
         @Override public void afterTextChanged(Editable text) {}
     };
@@ -321,12 +320,16 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (ultraTelMediaPreview != null) {
             topPanel.removeView(ultraTelMediaPreview);
             ultraTelMediaPreview = null;
-            hideTopView(true);
+            if (!ultraTelPreviousTopViewShown) {
+                hideTopView(false);
+            }
             setForceShowSendButton(ultraTelOldForceShowSendButton, false);
         }
         if (source == null) {
+            ultraTelPreviousTopViewShown = false;
             return;
         }
+        ultraTelPreviousTopViewShown = topViewShowed;
 
         // Use Telegram's existing 48dp composer-top panel instead of placing
         // a floating view inside the input field. The latter could disappear
