@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/ultratel-beta-v1
+      - work/ultratel-turbo-composer-refactor-20261116
   workflow_dispatch:
     inputs:
       compile_only:
