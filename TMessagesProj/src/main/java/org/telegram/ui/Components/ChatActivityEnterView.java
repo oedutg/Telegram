@@ -251,6 +251,11 @@ public class ChatActivityEnterView extends FrameLayout implements
     private UltraTelTextSendInterceptor ultraTelTextSendInterceptor;
     private FrameLayout ultraTelMediaPreview;
     private int ultraTelPreviousEditorMaxLines = -1;
+    private boolean ultraTelPreviousFocusable;
+    private boolean ultraTelPreviousFocusableInTouchMode;
+    private boolean ultraTelPreviousClickable;
+    private boolean ultraTelPreviousFocused;
+    private boolean ultraTelPreviousEnabled;
     private boolean ultraTelPreviousTopViewShown;
     private boolean ultraTelOldForceShowSendButton;
     private int ultraTelPreviousAttachVisibility = -1;
@@ -283,6 +288,11 @@ public class ChatActivityEnterView extends FrameLayout implements
         if (messageEditText != null) {
             if (ultraTelTextSendInterceptor != null && !wasEditingLocally) {
                 ultraTelPreviousEditorMaxLines = messageEditText.getMaxLines();
+                ultraTelPreviousFocusable = messageEditText.isFocusable();
+                ultraTelPreviousFocusableInTouchMode = messageEditText.isFocusableInTouchMode();
+                ultraTelPreviousClickable = messageEditText.isClickable();
+                ultraTelPreviousFocused = messageEditText.hasFocus();
+                ultraTelPreviousEnabled = messageEditText.isEnabled();
                 messageEditText.setMaxLines(4);
             } else if (ultraTelTextSendInterceptor == null && wasEditingLocally
                     && ultraTelPreviousEditorMaxLines > 0) {
@@ -293,6 +303,17 @@ public class ChatActivityEnterView extends FrameLayout implements
         // Refresh field permissions when the isolated media editor starts or ends.
         if (messageEditText != null) {
             updateFieldHint(false);
+            if (ultraTelTextSendInterceptor == null && wasEditingLocally) {
+                // The native hint refresh restores channel permissions; these
+                // flags also restore any pre-existing nonstandard input state.
+                messageEditText.setFocusable(ultraTelPreviousFocusable);
+                messageEditText.setFocusableInTouchMode(ultraTelPreviousFocusableInTouchMode);
+                messageEditText.setClickable(ultraTelPreviousClickable);
+                if (!ultraTelPreviousEnabled) messageEditText.setEnabled(false);
+                if (!ultraTelPreviousFocused && messageEditText.hasFocus()) {
+                    messageEditText.clearFocus();
+                }
+            }
             if (ultraTelTextSendInterceptor != null) {
                 // The source channel may have disabled the EditText before
                 // the edit-and-send draft was installed.

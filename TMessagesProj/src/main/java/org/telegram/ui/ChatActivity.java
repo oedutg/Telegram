@@ -34364,10 +34364,12 @@ public class ChatActivity extends BaseFragment implements
             if (!ultraTelMediaComposerActive || chatActivityEnterView == null) return;
             ultraTelMediaComposerActive = false;
             ultraTelComposerGeneration++;
-            chatActivityEnterView.setUltraTelTextSendInterceptor(null);
-            chatActivityEnterView.setUltraTelMediaPreview(null, 0, null);
+            // Clear the isolated caption while the local interceptor still
+            // protects read-only chats from the native restricted-field path.
             chatActivityEnterView.setFieldText("");
             chatActivityEnterView.closeKeyboard();
+            chatActivityEnterView.setUltraTelMediaPreview(null, 0, null);
+            chatActivityEnterView.setUltraTelTextSendInterceptor(null);
             // Restore the source conversation's real input restrictions and
             // original bottom action bar on explicit cancellation/completion.
             updateBottomOverlay(false);
