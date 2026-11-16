@@ -1,0 +1,66 @@
+name: TurboTel DEX decompilation (analysis only)
+on:
+  push:
+    branches:
+      - analysis/turbotel-apk-reference
+    paths:
+      - '.github/workflows/turbotel-dex-analysis.yml'
+      - 'docs/turbotel-apk/classes*.dex'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  decompile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            docs/turbotel-apk
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Download official JADX CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, urllib.request
+          url = 'https://api.github.com/repos/skylot/jadx/releases/latest'
+          req = urllib.request.Request(url, headers={'User-Agent': 'UltraTel-analysis'})
+          with urllib.request.urlopen(req) as response:
+              release = json.load(response)
+          assets = [a for a in release['assets'] if a['name'].startswith('jadx-') and a['name'].endswith('.zip') and 'jre' not in a['name']]
+          if not assets:
+              raise SystemExit('No JADX CLI zip asset in latest release')
+          asset = assets[0]
+          print('Downloading', asset['name'])
+          urllib.request.urlretrieve(asset['browser_download_url'], '/tmp/jadx.zip')
+          PY
+          unzip -q /tmp/jadx.zip -d /tmp/jadx
+          chmod +x /tmp/jadx/bin/jadx
+      - name: Decompile seven DEX files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/turbotel-decompiled
+          /tmp/jadx/bin/jadx -r -j 2 -d /tmp/turbotel-decompiled docs/turbotel-apk/classes*.dex 2>&1 | tee /tmp/jadx.log
+      - name: Index likely editing and composer classes
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p /tmp/turbotel-decompiled
+          find /tmp/turbotel-decompiled -type f \( -iname '*ChatActivity*' -o -iname '*EnterView*' -o -iname '*Forward*' -o -iname '*ShareAlert*' -o -iname '*Edit*' \) > /tmp/turbotel-decompiled/target-class-index.txt || true
+          cp /tmp/jadx.log /tmp/turbotel-decompiled/jadx.log 2>/dev/null || true
+      - name: Upload analysis artifact (no source changes)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: turbotel-decompiled-java
+          path: /tmp/turbotel-decompiled/
+          retention-days: 7
+          if-no-files-found: warn
