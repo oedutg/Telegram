@@ -297,13 +297,8 @@ public class ChatActivityEnterView extends FrameLayout implements
                 ultraTelPreviousClickable = messageEditText.isClickable();
                 ultraTelPreviousFocused = messageEditText.hasFocus();
                 ultraTelPreviousEnabled = messageEditText.isEnabled();
-                messageEditText.setMaxLines(6);
-                // Keep the native caption editor compact even for very long messages.
-                // The EditText scrolls internally instead of expanding the chat panel.
-                messageEditText.setMaxHeight(
-                        messageEditText.getLineHeight() * 6
-                                + messageEditText.getPaddingTop() + messageEditText.getPaddingBottom());
-                messageEditText.setVerticalScrollBarEnabled(true);
+                // Apply the line limit after setInputType(), which may reset
+                // TextView's multiline and maximum-height configuration.
             } else if (ultraTelTextSendInterceptor == null && wasEditingLocally
                     && ultraTelPreviousEditorMaxLines > 0) {
                 messageEditText.setMaxLines(ultraTelPreviousEditorMaxLines);
@@ -334,6 +329,14 @@ public class ChatActivityEnterView extends FrameLayout implements
                 messageEditText.setFocusable(true);
                 messageEditText.setFocusableInTouchMode(true);
                 messageEditText.setInputType(commonInputType);
+                messageEditText.setSingleLine(false);
+                messageEditText.setMaxLines(6);
+                // Restrict the forwarded caption to the native six-line editor.
+                // Long text scrolls inside the EditText, including in read-only chats.
+                messageEditText.setMaxHeight(
+                        messageEditText.getLineHeight() * 6
+                                + messageEditText.getPaddingTop() + messageEditText.getPaddingBottom());
+                messageEditText.setVerticalScrollBarEnabled(true);
                 messageEditText.setClickable(true);
             }
         }
