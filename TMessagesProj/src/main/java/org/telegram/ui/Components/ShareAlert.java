@@ -733,7 +733,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 int availableHeight = totalHeight - getPaddingTop();
 
                 int size = Math.max(searchAdapter.getItemCount(), listAdapter.getItemCount() - 1);
-                int contentSize = dp(103) + dp(48) + Math.max(2, (int) Math.ceil(size / 4.0f)) * dp(103) + backgroundPaddingTop;
+                int contentSize = dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : 103) + dp(48) + Math.max(2, (int) Math.ceil(size / 4.0f)) * dp(103) + backgroundPaddingTop;
                 if (topicsGridView.getVisibility() != View.GONE) {
                     int topicsSize = dp(103) + dp(48) + Math.max(2, (int) Math.ceil((shareTopicsAdapter.getItemCount() - 1) / 4.0f)) * dp(103) + backgroundPaddingTop;
                     if (topicsSize > contentSize) {
@@ -2146,6 +2146,10 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
         if (listAdapter != null) listAdapter.fetchDialogs();
         if (searchAdapter != null) searchAdapter.notifyDataSetChanged();
+        // Opening the edited-media picker must start at the header spacer.
+        // A reused grid scroll offset can hide the first row behind folder tabs.
+        if (layoutManager != null) layoutManager.scrollToPositionWithOffset(0, 0);
+        if (topicsLayoutManager != null) topicsLayoutManager.scrollToPositionWithOffset(0, 0);
     }
 
     private void setupUltraTelEditControls() {
