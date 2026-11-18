@@ -1227,12 +1227,16 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
             @Override
             public void draw(Canvas canvas) {
-                if (topicsGridView.getVisibility() != View.GONE) {
+                // Keep recipient rows below the UltraTel folder tabs even when
+                // the topics grid is hidden. Both grids share the moving header.
+                boolean clipHeader = topicsGridView.getVisibility() != View.GONE
+                        || ultraTelEditedMediaMode || ultraTelBulkMode;
+                if (clipHeader) {
                     canvas.save();
                     canvas.clipRect(0, scrollOffsetY + dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)), getWidth(), getHeight());
                 }
                 super.draw(canvas);
-                if (topicsGridView.getVisibility() != View.GONE) {
+                if (clipHeader) {
                     canvas.restore();
                 }
             }
@@ -1336,12 +1340,16 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
             @Override
             public void draw(Canvas canvas) {
-                if (topicsGridView.getVisibility() != View.GONE) {
+                // Keep recipient rows below the UltraTel folder tabs even when
+                // the topics grid is hidden. Both grids share the moving header.
+                boolean clipHeader = topicsGridView.getVisibility() != View.GONE
+                        || ultraTelEditedMediaMode || ultraTelBulkMode;
+                if (clipHeader) {
                     canvas.save();
                     canvas.clipRect(0, scrollOffsetY + dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : (darkTheme && linkToCopy[1] != null ? 111 : 58)), getWidth(), getHeight());
                 }
                 super.draw(canvas);
-                if (topicsGridView.getVisibility() != View.GONE) {
+                if (clipHeader) {
                     canvas.restore();
                 }
             }
