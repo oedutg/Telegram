@@ -735,7 +735,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 int size = Math.max(searchAdapter.getItemCount(), listAdapter.getItemCount() - 1);
                 int contentSize = dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : 103) + dp(48) + Math.max(2, (int) Math.ceil(size / 4.0f)) * dp(103) + backgroundPaddingTop;
                 if (topicsGridView.getVisibility() != View.GONE) {
-                    int topicsSize = dp(103) + dp(48) + Math.max(2, (int) Math.ceil((shareTopicsAdapter.getItemCount() - 1) / 4.0f)) * dp(103) + backgroundPaddingTop;
+                    int topicsSize = dp((ultraTelEditedMediaMode || ultraTelBulkMode) ? 108 : 103) + dp(48) + Math.max(2, (int) Math.ceil((shareTopicsAdapter.getItemCount() - 1) / 4.0f)) * dp(103) + backgroundPaddingTop;
                     if (topicsSize > contentSize) {
                         contentSize = AndroidUtilities.lerp(contentSize, topicsSize, topicsGridView.getAlpha());
                     }
@@ -2353,6 +2353,19 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         ultraTelUpdatingSelectAll = false;
     }
 
+    /** Hide the recipient-specific controls while the native topic header is in use. */
+    private void setUltraTelTopicsHeaderVisible(boolean topicsVisible) {
+        if (!ultraTelEditedMediaMode && !ultraTelBulkMode) {
+            return;
+        }
+        if (ultraTelEditControls != null) {
+            ultraTelEditControls.setVisibility(topicsVisible ? View.GONE : View.VISIBLE);
+        }
+        if (ultraTelFolderTabs != null) {
+            ultraTelFolderTabs.setVisibility(topicsVisible ? View.GONE : View.VISIBLE);
+        }
+    }
+
     private void selectDialog(View cell, TLRPC.Dialog dialog) {
         // A campanha Emvio Múltiplo remains private-only; edited media uses
         // Telegram's normal permission-aware picker, including groups/channels.
@@ -2459,6 +2472,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                             }
 
                             if (animate) {
+                                setUltraTelTopicsHeaderVisible(true);
                                 topicsGridView.setVisibility(View.VISIBLE);
                                 topicsGridView.setAlpha(0);
                                 topicsBackActionBar.setVisibility(View.VISIBLE);
@@ -2579,6 +2593,16 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         }
 
         if (cell == null) {
+            // The source dialog may have disappeared after a folder refresh.
+            // Restore the recipient header rather than leaving the topic UI open.
+            setUltraTelTopicsHeaderVisible(false);
+            topicsGridView.setVisibility(View.GONE);
+            topicsBackActionBar.setVisibility(View.GONE);
+            shareTopicsAdapter.topics = null;
+            shareTopicsAdapter.notifyDataSetChanged();
+            searchWasVisibleBeforeTopics = false;
+            getMainGridView().setVisibility(View.VISIBLE);
+            searchView.setVisibility(View.VISIBLE);
             return;
         }
 
@@ -2609,6 +2633,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
         topicsAnimation.addEndListener((animation, canceled, value, velocity) -> {
             topicsGridView.setVisibility(View.GONE);
             topicsBackActionBar.setVisibility(View.GONE);
+            setUltraTelTopicsHeaderVisible(false);
 
             shareTopicsAdapter.topics = null;
             shareTopicsAdapter.notifyDataSetChanged();
@@ -3668,7 +3693,8 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                 case 1:
                 default: {
                     view = new View(context);
-                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT, ActionBar.getCurrentActionBarHeight()));
+                    view.setLayoutParams(new RecyclerView.LayoutParams(RecyclerView.LayoutParams.MATCH_PARENT,
+                            (ultraTelEditedMediaMode || ultraTelBulkMode) ? dp(108) : ActionBar.getCurrentActionBarHeight()));
                     break;
                 }
             }
@@ -3677,6 +3703,16 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
         @Override
         public void onBindViewHolder(RecyclerView.ViewHolder holder, int position) {
+            if (holder.getItemViewType() == 1) {
+                // RecyclerView may recycle the spacer across picker layouts.
+                int height = (ultraTelEditedMediaMode || ultraTelBulkMode)
+                        ? dp(108) : ActionBar.getCurrentActionBarHeight();
+                ViewGroup.LayoutParams lp = holder.itemView.getLayoutParams();
+                if (lp != null && lp.height != height) {
+                    lp.height = height;
+                    holder.itemView.setLayoutParams(lp);
+                }
+            }
             if (holder.getItemViewType() == 0) {
                 ShareTopicCell cell = (ShareTopicCell) holder.itemView;
                 if (position == 1 && isBotForum) {
