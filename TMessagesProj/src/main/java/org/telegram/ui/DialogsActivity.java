@@ -2931,10 +2931,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (statusDrawable == null || actionBar == null) {
             return;
         }
-        // Show the signed-in account's first name on the main chat screen.
-        // Keep UltraTel as the application name elsewhere and preserve Premium status.
+        // Preserve personal account names (e.g. Eduardo), while ensuring that
+        // a legacy "Telegram" header is branded as UltraTel on the main screen.
         if (folderId == 0 && communityId == 0 && !onlySelect) {
             String accountName = user != null ? UserObject.getFirstName(user) : null;
+            if (accountName != null && accountName.startsWith("Telegram")) {
+                accountName = getString(R.string.AppName)
+                        + accountName.substring("Telegram".length());
+            }
             actionBar.setTitle(accountName != null && !accountName.trim().isEmpty()
                 ? accountName : getString(R.string.AppName), statusDrawable);
         }
