@@ -55,6 +55,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Restaurar cache de dependências Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+          cache-cleanup: on-success
+
       - name: Preparar credenciais Telegram e assinatura própria
         env:
           ULTRATEL_API_ID: ${{ secrets.ULTRATEL_API_ID }}
@@ -102,23 +108,47 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.compile_only == true
         run: |
           chmod +x ./gradlew
+          # Retry only transient repository failures; do not mask compiler errors.
+          for attempt in 1 2 3; do
+            set +e
           ./gradlew :TMessagesProj_App:compileAfatReleaseJavaWithJavac \
-            --no-daemon \
-            --stacktrace \
-            --max-workers=2 \
-            -Dorg.gradle.parallel=false \
-            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+              --no-daemon \
+              --stacktrace \
+              --max-workers=2 \
+              -Dorg.gradle.parallel=false \
+              -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" 2>&1 | tee gradle-attempt.log
+            result=${PIPESTATUS[0]}
+            set -e
+            if [ "$result" -eq 0 ]; then break; fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eqi '429|Too Many Requests|HTTP (502|503|504)|status code (502|503|504)|Read timed out|Connection reset' gradle-attempt.log; then
+              exit "$result"
+            fi
+            echo "Transient Gradle dependency download error; retry $attempt/3"
+            sleep $((attempt * 30))
+          done
 
       - name: Compilar APK UltraTel (afatRelease)
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.compile_only != true)
         run: |
           chmod +x ./gradlew
+          # Retry only transient repository failures; do not mask compiler errors.
+          for attempt in 1 2 3; do
+            set +e
           ./gradlew :TMessagesProj_App:assembleAfatRelease \
-            --no-daemon \
-            --stacktrace \
-            --max-workers=2 \
-            -Dorg.gradle.parallel=false \
-            -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8"
+              --no-daemon \
+              --stacktrace \
+              --max-workers=2 \
+              -Dorg.gradle.parallel=false \
+              -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" 2>&1 | tee gradle-attempt.log
+            result=${PIPESTATUS[0]}
+            set -e
+            if [ "$result" -eq 0 ]; then break; fi
+            if [ "$attempt" -eq 3 ] || ! grep -Eqi '429|Too Many Requests|HTTP (502|503|504)|status code (502|503|504)|Read timed out|Connection reset' gradle-attempt.log; then
+              exit "$result"
+            fi
+            echo "Transient Gradle dependency download error; retry $attempt/3"
+            sleep $((attempt * 30))
+          done
 
       - name: Disponibilizar APK
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.compile_only != true)
