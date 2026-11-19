@@ -8,7 +8,7 @@ The original Telegram alternate icon assets are not changed by this script.
 from pathlib import Path
 import sys
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageChops
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,14 +37,33 @@ def main():
         round_mask = Image.new("L", (side, side), 0)
         ImageDraw.Draw(round_mask).ellipse((0, 0, side - 1, side - 1), fill=255)
         round_icon = scaled.copy()
-        round_icon.putalpha(round_mask)
+        round_icon.putalpha(ImageChops.multiply(scaled.getchannel("A"), round_mask))
         round_icon.save(directory / "ic_launcher_round.png", optimize=True)
 
-    adaptive_path = RES / "drawable-nodpi/ultratel_adaptive_foreground.png"
-    adaptive_path.parent.mkdir(parents=True, exist_ok=True)
-    icon.resize((432, 432), Image.Resampling.LANCZOS).save(adaptive_path, optimize=True)
+    nodpi = RES / "drawable-nodpi"
+    nodpi.mkdir(parents=True, exist_ok=True)
 
-    print("UltraTel: launcher icons ready for 5 densities and adaptive Android.")
+    # Fit the official brand artwork within Android's adaptive-icon safe area.
+    adaptive = Image.new("RGBA", (432, 432), (0, 0, 0, 0))
+    adaptive.alpha_composite(icon.resize((288, 288), Image.Resampling.LANCZOS), (72, 72))
+    adaptive.save(nodpi / "ultratel_adaptive_foreground.png", optimize=True)
+
+    # Static launch window on Android versions below 12.
+    icon.resize((144, 144), Image.Resampling.LANCZOS).save(
+        nodpi / "ultratel_startup_logo.png", optimize=True
+    )
+
+    # Smooth zoom/bounce showing exactly the same UltraTel logo on Android 12+.
+    # The first frame shows the complete logo even on static-only devices.
+    for frame, side in enumerate((164, 174, 186, 199, 194, 192)):
+        canvas = Image.new("RGBA", (288, 288), (0, 0, 0, 0))
+        scaled_frame = icon.resize((side, side), Image.Resampling.LANCZOS)
+        canvas.alpha_composite(
+            scaled_frame, ((288 - side) // 2, (288 - side) // 2)
+        )
+        canvas.save(nodpi / f"ultratel_splash_frame_{frame}.png", optimize=True)
+
+    print("UltraTel: launcher, adaptive, startup and animated splash assets ready.")
 
 
 if __name__ == "__main__":

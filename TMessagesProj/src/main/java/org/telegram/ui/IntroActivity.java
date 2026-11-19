@@ -254,9 +254,13 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
         introBrandIcon = new ImageView(context);
         introBrandIcon.setScaleType(ImageView.ScaleType.FIT_CENTER);
         introBrandIcon.setImageResource(R.mipmap.ic_launcher);
+        introBrandIcon.setAlpha(0f);
+        introBrandIcon.setScaleX(0.90f);
+        introBrandIcon.setScaleY(0.90f);
         introBrandIcon.setContentDescription(LocaleController.getString(R.string.AppName));
         introBrandIcon.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
         frameLayout2.addView(introBrandIcon, LayoutHelper.createFrame(ICON_WIDTH_DP, ICON_HEIGHT_DP, Gravity.CENTER));
+        introBrandIcon.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(450L).start();
         textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override
             public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surface, int width, int height) {
