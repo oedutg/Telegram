@@ -2931,16 +2931,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (statusDrawable == null || actionBar == null) {
             return;
         }
-        // Preserve personal account names (e.g. Eduardo), while ensuring that
-        // a legacy "Telegram" header is branded as UltraTel on the main screen.
+        // Brand the collapsed app header; do not rename the account.
         if (folderId == 0 && communityId == 0 && !onlySelect) {
-            String accountName = user != null ? UserObject.getFirstName(user) : null;
-            if (accountName != null && accountName.startsWith("Telegram")) {
-                accountName = getString(R.string.AppName)
-                        + accountName.substring("Telegram".length());
-            }
-            actionBar.setTitle(accountName != null && !accountName.trim().isEmpty()
-                ? accountName : getString(R.string.AppName), statusDrawable);
+            actionBar.setTitle(getString(R.string.AppName), statusDrawable);
         }
         Long emojiStatusId = UserObject.getEmojiStatusDocumentId(user);
         statusDrawableGiftId = null;

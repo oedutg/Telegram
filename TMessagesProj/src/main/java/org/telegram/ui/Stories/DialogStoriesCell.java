@@ -339,6 +339,7 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
                 connectionOverlayAction.run();
             }
         });
+        titleView.setClickable(true);
         addView(titleView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         // The Stories header draws independently from DialogsActivity's action bar.
@@ -375,6 +376,7 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
                 connectionOverlayAction.run();
             }
         });
+        subtitleOverlayContainer.setClickable(true);
         addView(subtitleOverlayContainer, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
 
         grayPaint.setColor(0xffD5DADE);
