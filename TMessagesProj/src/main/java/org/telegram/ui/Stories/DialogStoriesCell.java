@@ -345,13 +345,13 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
         // The Stories header draws independently from DialogsActivity's action bar.
         // Use the fork name here too; the previous Telegram vector was still visible.
         telegramLogoView = new TextView(context);
-        telegramLogoView.setText(getString(R.string.AppName));
+        telegramLogoView.setText("UltraTel");
         telegramLogoView.setTextColor(getTextLogoColor());
         telegramLogoView.setTextSize(20);
         telegramLogoView.setTypeface(AndroidUtilities.bold());
         telegramLogoView.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
         telegramLogoView.setSingleLine(true);
-        telegramLogoView.setContentDescription(getString(R.string.AppName));
+        telegramLogoView.setContentDescription("UltraTel");
         telegramLogoView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         addView(telegramLogoView, LayoutHelper.createFrame(90, 26));
 
