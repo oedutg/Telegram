@@ -150,6 +150,18 @@ jobs:
             sleep $((attempt * 30))
           done
 
+      - name: Verificar integridade e assinatura do APK antes de publicar
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.compile_only != true)
+        run: |
+          set -euo pipefail
+          APK="TMessagesProj_App/build/outputs/apk/afat/release/app.apk"
+          test -s "$APK"
+          unzip -t "$APK" | tail -n 2
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -p 4 "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 12
+          sha256sum "$APK"
+
       - name: Disponibilizar APK
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.compile_only != true)
         uses: actions/upload-artifact@v4
