@@ -2933,7 +2933,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         // Brand the collapsed app header; do not rename the account.
         if (folderId == 0 && communityId == 0 && !onlySelect) {
-            actionBar.setTitle(getString(R.string.AppName), statusDrawable);
+            actionBar.setTitle("UltraTel", statusDrawable);
         }
         Long emojiStatusId = UserObject.getEmojiStatusDocumentId(user);
         statusDrawableGiftId = null;
@@ -3446,7 +3446,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 // a new drawable (also when the view is recreated after a theme switch made elsewhere): remember its tint, the
                 // theme hook only recolors when the color differs from the last one applied
                 logoDrawable.setColorFilter(lastLogoDrawableColor = getThemedColor(Theme.key_telegram_color_dialogsLogo), PorterDuff.Mode.MULTIPLY);
-                SpannableStringBuilder ssb = new SpannableStringBuilder(getString(R.string.AppName));
+                SpannableStringBuilder ssb = new SpannableStringBuilder("UltraTel");
                 // UltraTel: show the fork name instead of Telegram's logo glyph.
                 actionBar.setTitle(ssb, statusDrawable);
                 updateStatus(UserConfig.getInstance(currentAccount).getCurrentUser(), false);
