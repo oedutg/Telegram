@@ -159,7 +159,8 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
     LinearLayoutManager layoutManager;
     AnimatedTextView titleView;
     ActionBarAnimatedSubtitleOverlayContainer subtitleOverlayContainer;
-    ImageView telegramLogoView;
+    TextView telegramLogoView;
+    private Runnable connectionOverlayAction;
     ImageView emojiStatusView;
     AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable statusDrawable;
     boolean drawCircleForce;
@@ -331,16 +332,27 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
         titleView.setTextSize(dp(!AndroidUtilities.isTablet() && getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE ? 18 : 20));
         titleView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         titleView.setFocusableInTouchMode(true);
+        // The Stories title sits above the normal ActionBar. Forward taps on
+        // connection status to the same proxy action supplied by LaunchActivity.
+        titleView.setOnClickListener(v -> {
+            if (hasOverlayText && connectionOverlayAction != null) {
+                connectionOverlayAction.run();
+            }
+        });
         addView(titleView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
-        telegramLogoView = new ImageView(context);
+        // The Stories header draws independently from DialogsActivity's action bar.
+        // Use the fork name here too; the previous Telegram vector was still visible.
+        telegramLogoView = new TextView(context);
+        telegramLogoView.setText(getString(R.string.AppName));
+        telegramLogoView.setTextColor(getTextLogoColor());
+        telegramLogoView.setTextSize(20);
+        telegramLogoView.setTypeface(AndroidUtilities.bold());
+        telegramLogoView.setGravity(Gravity.CENTER_VERTICAL | Gravity.LEFT);
+        telegramLogoView.setSingleLine(true);
         telegramLogoView.setContentDescription(getString(R.string.AppName));
-        telegramLogoView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        telegramLogoView.setImageResource(R.drawable.telegram_logo_2);
-        telegramLogoView.setColorFilter(getTextLogoColor(), PorterDuff.Mode.MULTIPLY);
         telegramLogoView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
-        telegramLogoView.setFocusableInTouchMode(true);
-        addView(telegramLogoView, LayoutHelper.createFrame(90, 22));
+        addView(telegramLogoView, LayoutHelper.createFrame(90, 26));
 
         statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
         statusDrawable.center = true;
@@ -358,6 +370,11 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
                 DialogStoriesCell.this.invalidate();
             }
         };
+        subtitleOverlayContainer.setOnClickListener(v -> {
+            if (hasOverlayText && connectionOverlayAction != null) {
+                connectionOverlayAction.run();
+            }
+        });
         addView(subtitleOverlayContainer, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT));
 
         grayPaint.setColor(0xffD5DADE);
@@ -1158,7 +1175,7 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
         if (subtitleOverlayContainer != null) {
             subtitleOverlayContainer.updateColors();
         }
-        telegramLogoView.setColorFilter(getTextLogoColor(), PorterDuff.Mode.MULTIPLY);
+        telegramLogoView.setTextColor(getTextLogoColor());
         AndroidUtilities.forEachViews(recyclerListView, view -> {
             StoryCell cell = (StoryCell) view;
             cell.invalidate();
@@ -1285,9 +1302,11 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
 
     EllipsizeSpanAnimator ellipsizeSpanAnimator = new EllipsizeSpanAnimator(this);
 
-    public void setTitleOverlayText(String titleOverlayText, int textId) {
+    public void setTitleOverlayText(String titleOverlayText, int textId, Runnable action) {
+        connectionOverlayAction = titleOverlayText != null ? action : null;
         final CharSequence subtitleToSet;
-        if (textId == R.string.ConnectingToProxyWithDots) {
+        if (connectionOverlayAction != null && (textId == R.string.ConnectingToProxyWithDots
+                || textId == R.string.Connecting || textId == R.string.WaitingForNetwork)) {
             subtitleToSet = AndroidUtilities.replaceArrows(getString(R.string.TitleSetupProxy), true, dp(8f / 3f), dp(2));
         } else {
             subtitleToSet = null;

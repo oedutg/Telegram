@@ -45,6 +45,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -106,6 +107,7 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
     private GradientDrawable startMessagingButtonBackground;
     private TextView startMessagingButton;
     private FrameLayout frameLayout2;
+    private ImageView introBrandIcon;
     private FrameLayout frameContainerView;
 
     private RLottieDrawable darkThemeDrawable;
@@ -247,6 +249,14 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
 
         TextureView textureView = new TextureView(context);
         frameLayout2.addView(textureView, LayoutHelper.createFrame(ICON_WIDTH_DP, ICON_HEIGHT_DP, Gravity.CENTER));
+        // Keep the existing native intro renderer alive for page transitions,
+        // but cover its Telegram imagery with the actual UltraTel launcher icon.
+        introBrandIcon = new ImageView(context);
+        introBrandIcon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        introBrandIcon.setImageResource(R.mipmap.ic_launcher);
+        introBrandIcon.setContentDescription(LocaleController.getString(R.string.AppName));
+        introBrandIcon.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+        frameLayout2.addView(introBrandIcon, LayoutHelper.createFrame(ICON_WIDTH_DP, ICON_HEIGHT_DP, Gravity.CENTER));
         textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
             @Override
             public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surface, int width, int height) {
@@ -962,6 +972,9 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
     private void updateColors(boolean fromTheme) {
         startMessagingButtonBackground.setColors(new int[]{getThemedColor(Theme.key_featuredStickers_addButton), getThemedColor(Theme.key_featuredStickers_addButton2)});
         fragmentView.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+        if (introBrandIcon != null) {
+            introBrandIcon.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+        }
         switchLanguageTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
         startMessagingButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
         startMessagingButton.setBackground(Theme.createSimpleSelectorRoundRectDrawable(dp(24), Color.TRANSPARENT, Theme.getColor(Theme.key_featuredStickers_addButtonPressed)));
@@ -1020,6 +1033,9 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
                 logoDrawable.setColorFilter(logoColor, PorterDuff.Mode.MULTIPLY);
             }
             fragmentView.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+            if (introBrandIcon != null) {
+                introBrandIcon.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+            }
             if (switchLanguageTextView != null) {
                 switchLanguageTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
             }

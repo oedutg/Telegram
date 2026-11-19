@@ -3125,7 +3125,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             ((SelectAnimatedEmojiDialog) selectAnimatedEmojiDialog.getContentView()).setScrimDrawable(textView != null && textView.getRightDrawable() == statusDrawable ? statusDrawable : null, textView);
         }
         if (dialogStoriesCell != null) {
-            dialogStoriesCell.setTitleOverlayText(title, titleId);
+            dialogStoriesCell.setTitleOverlayText(title, titleId, action);
         }
     }
 
