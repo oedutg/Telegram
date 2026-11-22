@@ -1815,6 +1815,10 @@ public class PushListenerController {
                 try {
                     SharedConfig.pushStringGetTimeStart = SystemClock.elapsedRealtime();
                     FirebaseApp.initializeApp(ApplicationLoader.applicationContext);
+                    // Temporary diagnostic build: retrieve the Firebase Installation ID for Console testing.
+                    com.google.firebase.installations.FirebaseInstallations.getInstance().getId()
+                            .addOnSuccessListener(id -> android.util.Log.i("UltraTelFirebaseTest", "FID: " + id))
+                            .addOnFailureListener(error -> android.util.Log.e("UltraTelFirebaseTest", "Unable to obtain FID", error));
                     FirebaseMessaging.getInstance().getToken()
                             .addOnCompleteListener(task -> {
                                 SharedConfig.pushStringGetTimeEnd = SystemClock.elapsedRealtime();
